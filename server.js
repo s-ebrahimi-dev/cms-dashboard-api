@@ -18,7 +18,12 @@ app.use(
   }),
 );
 app.use(express.json());
-
+app.get("/health", (req, res) => {
+  res.json({
+    status: "ok",
+    message: "Backend is alive"
+  });
+});
 app.use("/api/users", userRouter);
 
 app.use((req, res) => {
