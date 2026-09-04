@@ -32,44 +32,56 @@ const getOneUser = async (req, res) => {
 };
 
 const registerUser = async (req, res) => {
-  const { error, value } = validator.registerSchema.validate(req.body || {});
+  try {
+    const { error, value } = validator.registerSchema.validate(req.body || {});
 
-  console.log(error);
+    console.log("REGISTER BODY:", req.body);
 
-  if (error) {
-    return res.status(400).json({ message: error.details[0].message });
+    if (error) {
+      return res.status(400).json({
+        message: error.details[0].message,
+      });
+    }
+
+    const {
+      firstname,
+      lastname,
+      username,
+      email,
+      phone,
+      password,
+    } = value;
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = {
+      firstname,
+      lastname,
+      username,
+      email,
+      phone,
+      password: hashedPassword,
+      role: "CUSTOMER",
+    };
+
+    const user = await UserModel.create(newUser);
+
+    const userWithoutPassword = user.toObject();
+
+    delete userWithoutPassword.password;
+
+    return res.status(201).json({
+      data: userWithoutPassword,
+      message: "User registered successfully :))",
+    });
+
+  } catch (error) {
+    console.error("REGISTER ERROR:", error);
+
+    return res.status(500).json({
+      message: error.message,
+    });
   }
-   const {
-    firstname,
-    lastname,
-    username,
-    email,
-    phone,
-     password,
-  } = value;
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  const newUser = {
-    firstname,
-    lastname,
-    username,
-    email,
-    phone,
-    password: hashedPassword,
-    role: "CUSTOMER"
-  };
-
-  const user = await UserModel.create(newUser);
-  
-  const userWithoutPassword = user.toObject();
-  delete userWithoutPassword.password;
-
-
-  return res.status(201).json({
-    data: userWithoutPassword,
-    message: "User registered successfully :))",
-  });
 };
 
 const loginUser = async (req, res) => {
