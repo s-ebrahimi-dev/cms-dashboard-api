@@ -30,6 +30,7 @@ const registerSchema = joi.object({
 
   phone: joi
     .number()
+    .min(11)
     .required()
     .messages({
     "number.base": "Phone number must be a valid number",
