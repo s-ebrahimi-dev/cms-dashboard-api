@@ -13,7 +13,7 @@ await connectDB();
 app.use(cookieParser());
 app.use(
   cors({
-    origin: "https://cms-frontend-rlf-cms-frontend.runflare.cloud",
+    origin: "https://cms-dashboard-27a-cms-dashboard.runflare.cloud",
     credentials: true,
   }),
 );
