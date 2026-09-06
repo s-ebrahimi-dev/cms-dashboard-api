@@ -13,7 +13,7 @@ await connectDB();
 app.use(cookieParser());
 app.use(
   cors({
-    origin: "https://resplendent-gumption-6a631d.netlify.app",
+    origin: "https://cms-frontend-rlf-cms-frontend.runflare.cloud",
     credentials: true,
   }),
 );
