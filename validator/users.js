@@ -29,11 +29,12 @@ const registerSchema = joi.object({
     .required(),
 
   phone: joi
-    .number()
-    .min(11)
-    .required()
-    .messages({
-    "number.base": "Phone number must be a valid number",
+  .string()
+  .trim()
+  .pattern(/^[0-9]{11}$/)
+  .required()
+  .messages({
+    "string.pattern.base": "Phone number must be exactly 11 digits",
   }),
   password: joi
     .string()

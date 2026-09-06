@@ -29,13 +29,12 @@ const schema = new mongoose.Schema(
       trim: true,
       lowercase: true,
     },
-    phone: {
-      type: Number,
-      required: true,
-      trim: true,
-      minlength: 11,
-      
-    },
+   phone: {
+  type: String,
+  required: true,
+  trim: true,
+  match: /^[0-9]{11}$/,
+},
     password: {
       type: String,
       required: true,
