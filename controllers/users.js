@@ -4,58 +4,27 @@ import validator from "../validator/users.js";
 import jwt from "jsonwebtoken";
 import UserModel from "../models/User.js";
 
- export const uploadProfileImage = async (req, res) => {
+const getMe = async (req, res) => {
   try {
-    if (!req.file) {
-      return res.status(400).json({
-        message: "Please select an image.",
-      });
-    }
+    const user = req.user.toObject();
 
-    const user = req.user;
+    delete user.password;
+    delete user.profileImage;
 
-    user.profileImage = {
-      data: req.file.buffer,
-      contentType: req.file.mimetype,
-    };
-
-    await user.save();
-
-    res.status(200).json({
-      message: "Profile picture updated successfully.",
+    return res.status(200).json({
+      data: user,
+      message: "Current user retrieved successfully :))",
     });
   } catch (error) {
-    console.error(error);
+    console.error("GET ME ERROR:", error);
 
-    res.status(500).json({
-      message: "Failed to upload profile picture.",
+    return res.status(500).json({
+      message: "Failed to retrieve current user.",
     });
   }
 };
 
- const getProfileImage = async (req, res) => {
-  try {
-    const user = await UserModel.findById(req.user.id);
-
-    if (!user || !user.profileImage?.data) {
-      return res.status(404).end();
-    }
-
-    res.set(
-      "Content-Type",
-      user.profileImage.contentType
-    );
-
-    res.send(user.profileImage.data);
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      message: "Failed to load profile picture.",
-    });
-  }
-};
-
+ 
 const getAllUsers = async (req, res) => {
   const users = await UserModel.find().sort({createdAt: -1});
 
@@ -171,7 +140,7 @@ const loginUser = async (req, res) => {
 
   res.cookie("token", token, {
     httpOnly: true,
-    secure: true, // true in production with HTTPS
+    secure: false, // true in production with HTTPS
     sameSite: "lax",
     maxAge: 10 * 24 * 60 * 60 * 1000,
   });
@@ -243,4 +212,68 @@ const updateUserDocument = async(req, res) => {
     return res.status(500).json({message: error.message})
   }
 }
-export default {getProfileImage, uploadProfileImage, getAllUsers, getOneUser, registerUser, loginUser, removeUser, updateUser,updateUserDocument };
+
+export const uploadProfileImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        message: "Please select an image.",
+      });
+    }
+
+    const user = req.user;
+
+    user.profileImage = {
+      data: req.file.buffer,
+      contentType: req.file.mimetype,
+    };
+
+    await user.save();
+
+    res.status(200).json({
+      message: "Profile picture updated successfully.",
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      message: "Failed to upload profile picture.",
+    });
+  }
+};
+
+ const getProfileImage = async (req, res) => {
+  try {
+    const user = await UserModel.findById(req.user.id);
+
+    if (!user || !user.profileImage?.data) {
+      return res.status(404).end();
+    }
+
+    res.set(
+      "Content-Type",
+      user.profileImage.contentType
+    );
+
+    res.send(user.profileImage.data);
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      message: "Failed to load profile picture.",
+    });
+  }
+};
+ const logoutUser = (req, res) => {
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: false,
+    sameSite: "lax",
+  });
+
+  return res.status(200).json({
+    message: "Logged out successfully.",
+  });
+};
+
+export default {getProfileImage, uploadProfileImage, getMe, getAllUsers, getOneUser, registerUser, loginUser, removeUser, updateUser,updateUserDocument, logoutUser};
