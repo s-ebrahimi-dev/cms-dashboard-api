@@ -1,6 +1,8 @@
 import express from "express";
 import controller from "../controllers/users.js";
 import middleware from "../middlewares/index.js";
+import upload from "../middlewares/upload.js";
+
 const router = express.Router();
 
 router.use((req, res, next) => {
@@ -17,17 +19,48 @@ router.use((req, res, next) => {
 });
 
 router.get("/", controller.getAllUsers);
-router.get("/:id", middleware.checkAdmin, middleware.checkObjectId, controller.getOneUser);
+router.get(
+  "/:id",
+  middleware.checkAdmin,
+  middleware.checkObjectId,
+  controller.getOneUser,
+);
 
 router.post("/register", controller.registerUser);
 
+router.post(
+  "/profile-image",
+  middleware.checkAuth,
+  upload.single("profileImage"),
+  controller.uploadProfileImage
+);
+router.get(
+  "/profile-image",
+  middleware.checkAuth,
+  controller.getProfileImage
+);
 router.post("/login", controller.loginUser);
-router.patch("/update/:id",middleware.checkAdmin, middleware.checkObjectId, controller.updateUser)
-router.put("/update/:id", middleware.checkAdmin, middleware.checkObjectId, controller.updateUserDocument)
-router.delete("/delete/:id",middleware.checkAdmin, middleware.checkObjectId, controller.removeUser);
+router.patch(
+  "/update/:id",
+  middleware.checkAdmin,
+  middleware.checkObjectId,
+  controller.updateUser,
+);
+router.put(
+  "/update/:id",
+  middleware.checkAdmin,
+  middleware.checkObjectId,
+  controller.updateUserDocument,
+);
+router.delete(
+  "/delete/:id",
+  middleware.checkAdmin,
+  middleware.checkObjectId,
+  controller.removeUser,
+);
 router.delete("/delete/", (req, res) => {
-    return res.status(400).json({
-        message: "User id is required"
-    });
+  return res.status(400).json({
+    message: "User id is required",
+  });
 });
 export default router;

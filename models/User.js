@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 const schema = new mongoose.Schema(
-  { firstname: {
+  {
+    firstname: {
       type: String,
       required: true,
       trim: true,
@@ -15,7 +16,7 @@ const schema = new mongoose.Schema(
       minlength: 2,
       maxlength: 30,
     },
-    
+
     username: {
       type: String,
       required: true,
@@ -29,12 +30,12 @@ const schema = new mongoose.Schema(
       trim: true,
       lowercase: true,
     },
-   phone: {
-  type: String,
-  required: true,
-  trim: true,
-  match: /^[0-9]{11}$/,
-},
+    phone: {
+      type: String,
+      required: true,
+      trim: true,
+      match: /^[0-9]{11}$/,
+    },
     password: {
       type: String,
       required: true,
@@ -55,6 +56,10 @@ const schema = new mongoose.Schema(
         "WASH_TECHNICIAN",
       ],
       default: "CUSTOMER",
+    },
+     profileImage: {
+      data: Buffer,
+      contentType: String,
     },
   },
   {

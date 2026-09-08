@@ -4,6 +4,57 @@ import validator from "../validator/users.js";
 import jwt from "jsonwebtoken";
 import UserModel from "../models/User.js";
 
+ export const uploadProfileImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        message: "Please select an image.",
+      });
+    }
+
+    const user = req.user;
+
+    user.profileImage = {
+      data: req.file.buffer,
+      contentType: req.file.mimetype,
+    };
+
+    await user.save();
+
+    res.status(200).json({
+      message: "Profile picture updated successfully.",
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      message: "Failed to upload profile picture.",
+    });
+  }
+};
+
+ const getProfileImage = async (req, res) => {
+  try {
+    const user = await UserModel.findById(req.user.id);
+
+    if (!user || !user.profileImage?.data) {
+      return res.status(404).end();
+    }
+
+    res.set(
+      "Content-Type",
+      user.profileImage.contentType
+    );
+
+    res.send(user.profileImage.data);
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      message: "Failed to load profile picture.",
+    });
+  }
+};
 
 const getAllUsers = async (req, res) => {
   const users = await UserModel.find().sort({createdAt: -1});
@@ -192,4 +243,4 @@ const updateUserDocument = async(req, res) => {
     return res.status(500).json({message: error.message})
   }
 }
-export default { getAllUsers, getOneUser, registerUser, loginUser, removeUser, updateUser,updateUserDocument };
+export default {getProfileImage, uploadProfileImage, getAllUsers, getOneUser, registerUser, loginUser, removeUser, updateUser,updateUserDocument };
