@@ -37,6 +37,7 @@ router.get(
 );
 
 router.post("/register", controller.registerUser);
+router.post("/",middleware.checkAdmin, controller.createUser);
 
 router.post(
   "/profile-image",

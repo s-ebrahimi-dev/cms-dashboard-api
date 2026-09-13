@@ -151,6 +151,59 @@ const loginUser = async (req, res) => {
   });
 };
 
+const createUser = async (req, res) => {
+  try {
+    const { error, value } = validator.createUserSchema.validate(req.body || {});
+
+    console.log("CREATE BODY:", req.body);
+
+    if (error) {
+      return res.status(400).json({
+        message: error.details[0].message,
+      });
+    }
+
+    const {
+      firstname,
+      lastname,
+      username,
+      email,
+      phone,
+      password,
+      role,
+    } = value;
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = {
+      firstname,
+      lastname,
+      username,
+      email,
+      phone,
+      password: hashedPassword,
+      role,
+    };
+
+    const user = await UserModel.create(newUser);
+
+    const userWithoutPassword = user.toObject();
+
+    delete userWithoutPassword.password;
+
+    return res.status(201).json({
+      data: userWithoutPassword,
+      message: "User created successfully :))",
+    });
+
+  } catch (error) {
+    console.error("CREATION ERROR:", error);
+
+    return res.status(500).json({
+      message: error.message,
+    });
+  }
+};
 const removeUser = async (req, res) => {
   const { id } = req.params 
 
@@ -276,4 +329,4 @@ export const uploadProfileImage = async (req, res) => {
   });
 };
 
-export default {getProfileImage, uploadProfileImage, getMe, getAllUsers, getOneUser, registerUser, loginUser, removeUser, updateUser,updateUserDocument, logoutUser};
+export default {getProfileImage, uploadProfileImage, getMe, getAllUsers, getOneUser, registerUser, loginUser, createUser, removeUser, updateUser,updateUserDocument, logoutUser};

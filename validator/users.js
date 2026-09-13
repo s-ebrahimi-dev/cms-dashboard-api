@@ -52,5 +52,64 @@ const registerSchema = joi.object({
     "any.required": "Confirm password is required",
   }),
 });
+const createUserSchema = joi.object({
+  firstname: joi.string().trim().min(2).max(30).required(),
 
-export default { loginSchema, registerSchema };
+  lastname: joi.string().trim().min(2).max(30).required(),
+
+  username: joi
+    .string()
+    .trim()
+    .min(3)
+    .max(30)
+    .pattern(/^[a-zA-Z0-9_]+$/)
+    .required()
+    .messages({
+      "string.pattern.base":
+        "Username can only contain letters, numbers, and underscores",
+    }),
+
+  email: joi
+    .string().
+    trim().
+    email()
+    .required(),
+
+  phone: joi
+  .string()
+  .trim()
+  .pattern(/^[0-9]{11}$/)
+  .required()
+  .messages({
+    "string.pattern.base": "Phone number must be exactly 11 digits",
+  }),
+  password: joi
+    .string()
+    .min(8)
+    .max(100)
+    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$/)
+    .required()
+    .messages({
+      "string.pattern.base":
+        "Password must contain at least one uppercase letter, one lowercase letter, and one number",
+    }),
+
+  confirmPassword: joi.any().valid(joi.ref("password")).required().messages({
+    "any.only": "Passwords do not match",
+    "any.required": "Confirm password is required",
+  }),
+  role: joi.string()
+  .valid(
+    "ADMIN",
+    "CUSTOMER",
+    "RECEPTIONIST",
+    "MECHANIC",
+    "OIL_TECHNICIAN",
+    "BODY_REPAIR",
+    "DETAILING_TECHNICIAN",
+    "WASH_TECHNICIAN"
+  )
+  .required()
+});
+
+export default { loginSchema, registerSchema, createUserSchema };

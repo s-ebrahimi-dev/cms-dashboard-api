@@ -39,8 +39,6 @@ const schema = new mongoose.Schema(
     password: {
       type: String,
       required: true,
-      trim: true,
-      minlength: 6,
       select: false,
     },
     role: {

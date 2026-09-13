@@ -39,8 +39,11 @@ const PORT = Number(process.env.PORT) || 4000;
 
 const startServer = async () => {
   try {
+    console.log("🔵 Starting server...");
+    
     await connectDB();
 
+     console.log("🟢 DB ready. Starting Express...");
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`server is running on port ${PORT} ✌️`);
     });
