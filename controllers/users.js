@@ -5,14 +5,16 @@ import jwt from "jsonwebtoken";
 import UserModel from "../models/User.js";
 
 const getMe = async (req, res) => {
+  console.log("🔥 GET ME CONTROLLER EXECUTED");
   try {
     const user = req.user.toObject();
-
+    const hasProfileImage = Boolean(user.profileImage?.data);
+console.log("🔥 HAS PROFILE IMAGE:", hasProfileImage);
     delete user.password;
     delete user.profileImage;
 
     return res.status(200).json({
-      data: user,
+      data: {...user, hasProfileImage,},
       message: "Current user retrieved successfully :))",
     });
   } catch (error) {
@@ -317,6 +319,8 @@ export const uploadProfileImage = async (req, res) => {
     });
   }
 };
+
+
  const logoutUser = (req, res) => {
   res.clearCookie("token", {
     httpOnly: true,
