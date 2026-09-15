@@ -3,18 +3,19 @@ import bcrypt from "bcrypt";
 import validator from "../validator/users.js";
 import jwt from "jsonwebtoken";
 import UserModel from "../models/User.js";
+import MessageModel from "../models/Messages.js";
 
 const getMe = async (req, res) => {
   console.log("🔥 GET ME CONTROLLER EXECUTED");
   try {
     const user = req.user.toObject();
     const hasProfileImage = Boolean(user.profileImage?.data);
-console.log("🔥 HAS PROFILE IMAGE:", hasProfileImage);
+    console.log("🔥 HAS PROFILE IMAGE:", hasProfileImage);
     delete user.password;
     delete user.profileImage;
 
     return res.status(200).json({
-      data: {...user, hasProfileImage,},
+      data: { ...user, hasProfileImage },
       message: "Current user retrieved successfully :))",
     });
   } catch (error) {
@@ -26,9 +27,8 @@ console.log("🔥 HAS PROFILE IMAGE:", hasProfileImage);
   }
 };
 
- 
 const getAllUsers = async (req, res) => {
-  const users = await UserModel.find().sort({createdAt: -1});
+  const users = await UserModel.find().sort({ createdAt: -1 });
 
   return res.status(200).json({
     data: users,
@@ -37,20 +37,20 @@ const getAllUsers = async (req, res) => {
 };
 
 const getOneUser = async (req, res) => {
- const { id } = req.params;
+  const { id } = req.params;
 
-    const findedUser = await UserModel.findById(id).lean();
+  const findedUser = await UserModel.findById(id).lean();
 
-    if (!findedUser) {
-        return res.status(404).json({
-            message: "User not found with this info :(("
-        });
-    }
-
-    return res.status(200).json({
-        data: findedUser,
-        message: "User retrieved successfully :))"
+  if (!findedUser) {
+    return res.status(404).json({
+      message: "User not found with this info :((",
     });
+  }
+
+  return res.status(200).json({
+    data: findedUser,
+    message: "User retrieved successfully :))",
+  });
 };
 
 const registerUser = async (req, res) => {
@@ -65,14 +65,7 @@ const registerUser = async (req, res) => {
       });
     }
 
-    const {
-      firstname,
-      lastname,
-      username,
-      email,
-      phone,
-      password,
-    } = value;
+    const { firstname, lastname, username, email, phone, password } = value;
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -96,7 +89,6 @@ const registerUser = async (req, res) => {
       data: userWithoutPassword,
       message: "User registered successfully :))",
     });
-
   } catch (error) {
     console.error("REGISTER ERROR:", error);
 
@@ -155,7 +147,9 @@ const loginUser = async (req, res) => {
 
 const createUser = async (req, res) => {
   try {
-    const { error, value } = validator.createUserSchema.validate(req.body || {});
+    const { error, value } = validator.createUserSchema.validate(
+      req.body || {},
+    );
 
     console.log("CREATE BODY:", req.body);
 
@@ -165,15 +159,8 @@ const createUser = async (req, res) => {
       });
     }
 
-    const {
-      firstname,
-      lastname,
-      username,
-      email,
-      phone,
-      password,
-      role,
-    } = value;
+    const { firstname, lastname, username, email, phone, password, role } =
+      value;
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -197,7 +184,6 @@ const createUser = async (req, res) => {
       data: userWithoutPassword,
       message: "User created successfully :))",
     });
-
   } catch (error) {
     console.error("CREATION ERROR:", error);
 
@@ -207,14 +193,13 @@ const createUser = async (req, res) => {
   }
 };
 const removeUser = async (req, res) => {
-  const { id } = req.params 
+  const { id } = req.params;
 
-   if (!id) {
+  if (!id) {
     return res.status(400).json({ message: "User id is required" });
   }
 
- 
-  await UserModel.findByIdAndDelete(id)
+  await UserModel.findByIdAndDelete(id);
 
   return res.status(200).json({ message: "User removed successfully :))" });
 };
@@ -223,14 +208,7 @@ const updateUser = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const {
-      firstname,
-      lastname,
-      username,
-      email,
-      phone,
-      password,
-    } = req.body;
+    const { firstname, lastname, username, email, phone, password } = req.body;
 
     const user = await UserModel.findById(id);
 
@@ -265,33 +243,37 @@ const updateUser = async (req, res) => {
   }
 };
 
-const updateUserDocument = async(req, res) => {
+const updateUserDocument = async (req, res) => {
   try {
     const { id } = req.params;
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-        return res.status(400).json({
-          message: "Invalid user ID",
-          success: false
-        });
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        message: "Invalid user ID",
+        success: false,
+      });
     }
     const { username, email, password } = req.body;
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-
-    const user = await UserModel.findByIdAndUpdate(id, {username, email, password:hashedPassword}, {
-      returnDocument: "after",
-    })
+    const user = await UserModel.findByIdAndUpdate(
+      id,
+      { username, email, password: hashedPassword },
+      {
+        returnDocument: "after",
+      },
+    );
     if (user) {
-      return res.status(200).json({data: user, message: "User Updated successfully"})
+      return res
+        .status(200)
+        .json({ data: user, message: "User Updated successfully" });
     } else {
-            return res.status(404).json({message: "User Not Found"})
-
+      return res.status(404).json({ message: "User Not Found" });
     }
   } catch (error) {
-    return res.status(500).json({message: error.message})
+    return res.status(500).json({ message: error.message });
   }
-}
+};
 
 export const uploadProfileImage = async (req, res) => {
   try {
@@ -322,7 +304,7 @@ export const uploadProfileImage = async (req, res) => {
   }
 };
 
- const getProfileImage = async (req, res) => {
+const getProfileImage = async (req, res) => {
   try {
     const user = await UserModel.findById(req.user.id);
 
@@ -330,10 +312,7 @@ export const uploadProfileImage = async (req, res) => {
       return res.status(404).end();
     }
 
-    res.set(
-      "Content-Type",
-      user.profileImage.contentType
-    );
+    res.set("Content-Type", user.profileImage.contentType);
 
     res.send(user.profileImage.data);
   } catch (error) {
@@ -345,8 +324,7 @@ export const uploadProfileImage = async (req, res) => {
   }
 };
 
-
- const logoutUser = (req, res) => {
+const logoutUser = (req, res) => {
   res.clearCookie("token", {
     httpOnly: true,
     secure: false,
@@ -357,5 +335,56 @@ export const uploadProfileImage = async (req, res) => {
     message: "Logged out successfully.",
   });
 };
+const sendMessage = async (req, res) => {
+  try {
+    const { receiver, message } = req.body;
+    const sender = req.user._id;
 
-export default {getProfileImage, uploadProfileImage, getMe, getAllUsers, getOneUser, registerUser, loginUser, createUser, removeUser, updateUser,updateUserDocument, logoutUser};
+    if (!receiver || !message?.trim()) {
+      return res.status(400).json({
+        message: "Receiver and message are required",
+      });
+    }
+
+    const receiverUser = await UserModel.findById(receiver);
+
+    if (!receiverUser) {
+      return res.status(404).json({
+        message: "Receiver not found",
+      });
+    }
+
+    const newMessage = await MessageModel.create({
+      sender,
+      receiver,
+      message: message.trim(),
+    });
+
+    return res.status(201).json({
+      data: newMessage,
+      message: "Message sent successfully",
+    });
+  } catch (error) {
+    console.error("SEND MESSAGE ERROR:", error);
+
+    return res.status(500).json({
+      message: error.message,
+    });
+  }
+};
+
+export default {
+  getProfileImage,
+  uploadProfileImage,
+  getMe,
+  getAllUsers,
+  getOneUser,
+  registerUser,
+  loginUser,
+  createUser,
+  removeUser,
+  updateUser,
+  updateUserDocument,
+  logoutUser,
+  sendMessage,
+};

@@ -46,6 +46,7 @@ router.post(
   controller.uploadProfileImage
 );
 
+
 router.post("/login", controller.loginUser);
 router.patch(
   "/update/:id",
