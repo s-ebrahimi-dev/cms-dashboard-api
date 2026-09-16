@@ -5,6 +5,8 @@ import messageRouter from "./routes/messages.js"
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import connectDB from "./configs/db.js";
+import notificationRouter from "./routes/notifications.js";
+
 
 dotenv.config();
 
@@ -30,6 +32,7 @@ app.get("/health", (req, res) => {
 
 app.use("/api/users", userRouter);
 app.use("/api/users", messageRouter);
+app.use("/api/notifications", notificationRouter);
 app.use((req, res) => {
   res.status(404).json({
     message: "Route Not Found !!",
