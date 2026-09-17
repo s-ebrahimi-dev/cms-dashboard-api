@@ -4,6 +4,7 @@ import validator from "../validator/users.js";
 import jwt from "jsonwebtoken";
 import UserModel from "../models/User.js";
 import MessageModel from "../models/Messages.js";
+import NotificationModel from "../models/Notifications.js";
 
 const getMe = async (req, res) => {
   console.log("🔥 GET ME CONTROLLER EXECUTED");
@@ -358,6 +359,15 @@ const sendMessage = async (req, res) => {
       sender,
       receiver,
       message: message.trim(),
+    });
+
+     await NotificationModel.create({
+      sender,
+      recipient: receiver,
+      type: "MESSAGE",
+      title: "New Message",
+      message: message.trim(),
+      isRead: false,
     });
 
     return res.status(201).json({

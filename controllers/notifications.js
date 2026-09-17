@@ -5,8 +5,10 @@ const getNotifications = async (req, res) => {
     const userId = req.user._id;
 
       const notifications = await NotificationModel.find({
-      recipient: userId,
-    }).sort({ createdAt: -1 });
+  recipient: userId,
+})
+  .populate("sender", "username role")
+  .sort({ createdAt: -1 });
 
     return res.status(200).json({
       success: true,
