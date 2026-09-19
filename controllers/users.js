@@ -304,19 +304,37 @@ export const uploadProfileImage = async (req, res) => {
     });
   }
 };
-
 const getProfileImage = async (req, res) => {
-   try {
+  try {
     const user = await UserModel.findById(req.params.id);
 
-    if (!user || !user.profileImage?.data) {
+    if (!user?.profileImage?.data) {
       return res.status(404).end();
     }
 
     res.set("Content-Type", user.profileImage.contentType);
     res.send(user.profileImage.data);
   } catch (error) {
-    console.error(error);
+    console.error("GET PROFILE IMAGE ERROR:", error);
+
+    res.status(500).json({
+      message: "Failed to load profile picture.",
+    });
+  }
+};
+
+const getMyProfileImage = async (req, res) => {
+  try {
+    const user = req.user;
+
+    if (!user?.profileImage?.data) {
+      return res.status(404).end();
+    }
+
+    res.set("Content-Type", user.profileImage.contentType);
+    res.send(user.profileImage.data);
+  } catch (error) {
+    console.error("GET MY PROFILE IMAGE ERROR:", error);
 
     res.status(500).json({
       message: "Failed to load profile picture.",
@@ -384,6 +402,7 @@ const sendMessage = async (req, res) => {
 
 export default {
   getProfileImage,
+  getMyProfileImage,
   uploadProfileImage,
   getMe,
   getAllUsers,

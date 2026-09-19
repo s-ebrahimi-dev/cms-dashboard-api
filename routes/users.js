@@ -19,8 +19,16 @@ router.use((req, res, next) => {
 });
 
 router.get("/me", middleware.checkAuth, controller.getMe);
-router.get("/profile-image", middleware.checkAuth, controller.getProfileImage);
-router.get("/profile-image/:id", controller.getProfileImage);
+router.get(
+  "/profile-image",
+  middleware.checkAuth,
+  controller.getMyProfileImage
+);
+
+router.get(
+  "/profile-image/:id",
+  controller.getProfileImage
+);
 router.get("/", controller.getAllUsers);
 router.get(
   "/:id",
