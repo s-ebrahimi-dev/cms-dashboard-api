@@ -18,16 +18,9 @@ router.use((req, res, next) => {
   next();
 });
 
-router.get(
-  "/me",
-  middleware.checkAuth,
-  controller.getMe
-);
-router.get(
-  "/profile-image",
-  middleware.checkAuth,
-  controller.getProfileImage
-);
+router.get("/me", middleware.checkAuth, controller.getMe);
+router.get("/profile-image", middleware.checkAuth, controller.getProfileImage);
+router.get("/profile-image/:id", controller.getProfileImage);
 router.get("/", controller.getAllUsers);
 router.get(
   "/:id",
@@ -37,15 +30,14 @@ router.get(
 );
 
 router.post("/register", controller.registerUser);
-router.post("/",middleware.checkAdmin, controller.createUser);
+router.post("/", middleware.checkAdmin, controller.createUser);
 
 router.post(
   "/profile-image",
   middleware.checkAuth,
   upload.single("profileImage"),
-  controller.uploadProfileImage
+  controller.uploadProfileImage,
 );
-
 
 router.post("/login", controller.loginUser);
 router.patch(

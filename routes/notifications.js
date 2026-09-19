@@ -1,5 +1,4 @@
 import express from "express";
-
 import controller from "../controllers/notifications.js";
 import middleware from "../middlewares/index.js";
 
@@ -9,6 +8,11 @@ router.get(
   "/",
   middleware.checkAuth,
   controller.getNotifications,
+);
+router.patch(
+  "/:id/read",
+  middleware.checkAuth,
+  controller.markNotificationAsRead,
 );
 
 export default router;

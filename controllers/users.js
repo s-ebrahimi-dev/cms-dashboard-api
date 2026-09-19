@@ -306,15 +306,14 @@ export const uploadProfileImage = async (req, res) => {
 };
 
 const getProfileImage = async (req, res) => {
-  try {
-    const user = await UserModel.findById(req.user.id);
+   try {
+    const user = await UserModel.findById(req.params.id);
 
     if (!user || !user.profileImage?.data) {
       return res.status(404).end();
     }
 
     res.set("Content-Type", user.profileImage.contentType);
-
     res.send(user.profileImage.data);
   } catch (error) {
     console.error(error);
