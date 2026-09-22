@@ -243,6 +243,53 @@ const updateUser = async (req, res) => {
     });
   }
 };
+const updateOwnProfile = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const {
+      firstname,
+      lastname,
+      username,
+      email,
+      phone,
+      password,
+    } = req.body;
+
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      userId,
+      {
+        firstname,
+        lastname,
+        username,
+        email,
+        phone,
+        ...(password ? { password } : {}),
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    ).select("-password");
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Profile updated successfully",
+      data: updatedUser,
+    });
+  } catch (error) {
+    console.error("UPDATE OWN PROFILE ERROR:", error);
+
+    return res.status(500).json({
+      message: "Failed to update profile",
+    });
+  }
+};
 
 const updateUserDocument = async (req, res) => {
   try {
@@ -412,6 +459,7 @@ export default {
   createUser,
   removeUser,
   updateUser,
+  updateOwnProfile,
   updateUserDocument,
   logoutUser,
   sendMessage,

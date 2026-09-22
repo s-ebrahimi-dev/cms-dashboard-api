@@ -54,6 +54,11 @@ router.patch(
   middleware.checkObjectId,
   controller.updateUser,
 );
+router.patch(
+  "/profile",
+  middleware.checkAuth,
+  controller.updateOwnProfile,
+);
 router.put(
   "/update/:id",
   middleware.checkAdmin,
