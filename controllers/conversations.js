@@ -37,16 +37,12 @@ const getConversations = async (req, res) => {
       req.user.role === "CUSTOMER"
         ? { customer: userId }
         : { employee: userId };
-
+    const total = await ConversationModel.countDocuments(filter);
+    console.log("Conversation filter:", filter);
+    console.log("Total conversations in DB:", total);
     const conversations = await ConversationModel.find(filter)
-      .populate(
-        "customer",
-        "firstname lastname username role profileImage",
-      )
-      .populate(
-        "employee",
-        "firstname lastname username role profileImage",
-      )
+      .populate("customer", "firstname lastname username role profileImage")
+      .populate("employee", "firstname lastname username role profileImage")
       .sort({
         lastMessageAt: -1,
         updatedAt: -1,
@@ -120,14 +116,8 @@ const createConversation = async (req, res) => {
     });
 
     conversation = await ConversationModel.findById(conversation._id)
-      .populate(
-        "customer",
-        "firstname lastname username role",
-      )
-      .populate(
-        "employee",
-        "firstname lastname username role",
-      );
+      .populate("customer", "firstname lastname username role")
+      .populate("employee", "firstname lastname username role");
 
     return res.status(201).json({
       data: conversation,
@@ -153,14 +143,8 @@ const getConversation = async (req, res) => {
     }
 
     const conversation = await ConversationModel.findById(id)
-      .populate(
-        "customer",
-        "firstname lastname username role",
-      )
-      .populate(
-        "employee",
-        "firstname lastname username role",
-      );
+      .populate("customer", "firstname lastname username role")
+      .populate("employee", "firstname lastname username role");
 
     if (!conversation) {
       return res.status(404).json({
@@ -214,10 +198,7 @@ const getMessages = async (req, res) => {
     const messages = await MessageModel.find({
       conversation: id,
     })
-      .populate(
-        "sender",
-        "firstname lastname username role",
-      )
+      .populate("sender", "firstname lastname username role")
       .sort({
         createdAt: 1,
       });
@@ -308,10 +289,7 @@ const sendMessage = async (req, res) => {
 
     const populatedMessage = await MessageModel.findById(
       newMessage._id,
-    ).populate(
-      "sender",
-      "firstname lastname username role",
-    );
+    ).populate("sender", "firstname lastname username role");
 
     return res.status(201).json({
       data: populatedMessage,
