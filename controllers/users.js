@@ -3,8 +3,7 @@ import bcrypt from "bcrypt";
 import validator from "../validator/users.js";
 import jwt from "jsonwebtoken";
 import UserModel from "../models/User.js";
-import MessageModel from "../models/Messages.js";
-import NotificationModel from "../models/Notifications.js";
+
 
 const getMe = async (req, res) => {
   console.log("🔥 GET ME CONTROLLER EXECUTED");
@@ -400,52 +399,7 @@ const logoutUser = (req, res) => {
     message: "Logged out successfully.",
   });
 };
-const sendMessage = async (req, res) => {
-  try {
-    const { receiver, message } = req.body;
-    const sender = req.user._id;
 
-    if (!receiver || !message?.trim()) {
-      return res.status(400).json({
-        message: "Receiver and message are required",
-      });
-    }
-
-    const receiverUser = await UserModel.findById(receiver);
-
-    if (!receiverUser) {
-      return res.status(404).json({
-        message: "Receiver not found",
-      });
-    }
-
-    const newMessage = await MessageModel.create({
-      sender,
-      receiver,
-      message: message.trim(),
-    });
-
-     await NotificationModel.create({
-      sender,
-      recipient: receiver,
-      type: "MESSAGE",
-      title: "New Message",
-      message: message.trim(),
-      isRead: false,
-    });
-
-    return res.status(201).json({
-      data: newMessage,
-      message: "Message sent successfully",
-    });
-  } catch (error) {
-    console.error("SEND MESSAGE ERROR:", error);
-
-    return res.status(500).json({
-      message: error.message,
-    });
-  }
-};
 
 export default {
   getProfileImage,
@@ -462,5 +416,5 @@ export default {
   updateOwnProfile,
   updateUserDocument,
   logoutUser,
-  sendMessage,
+
 };

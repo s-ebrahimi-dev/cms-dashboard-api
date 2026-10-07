@@ -30,9 +30,9 @@ router.post(
 );
 
 router.patch(
-  "/messages/:id/read",
-  middleware.checkAuth,
-  controller.markMessageAsRead,
+  "/:id/read",
+    middleware.checkAuth,
+  controller.markConversationAsRead,
 );
 
 router.get(

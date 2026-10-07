@@ -23,26 +23,18 @@ const isEmployee = (user) => {
 };
 
 const canAccessConversation = (conversation, userId) => {
-  return (
-    conversation.customer._id.toString() === userId.toString() ||
-    conversation.employee._id.toString() === userId.toString()
+  return conversation.participants.some(
+    (participant) => participant._id.toString() === userId.toString(),
   );
 };
-
 const getConversations = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    const filter =
-      req.user.role === "CUSTOMER"
-        ? { customer: userId }
-        : { employee: userId };
-    const total = await ConversationModel.countDocuments(filter);
-    console.log("Conversation filter:", filter);
-    console.log("Total conversations in DB:", total);
-    const conversations = await ConversationModel.find(filter)
-      .populate("customer", "firstname lastname username role profileImage")
-      .populate("employee", "firstname lastname username role profileImage")
+    const conversations = await ConversationModel.find({
+      participants: userId,
+    })
+      .populate("participants", "firstname lastname username role profileImage")
       .sort({
         lastMessageAt: -1,
         updatedAt: -1,
@@ -63,61 +55,79 @@ const getConversations = async (req, res) => {
 
 const createConversation = async (req, res) => {
   try {
-    const { employee } = req.body;
-    const customer = req.user._id;
+    const { participant } = req.body;
+    const currentUser = req.user;
 
-    if (req.user.role !== "CUSTOMER") {
-      return res.status(403).json({
-        message: "Only customers can start a conversation",
-      });
-    }
-
-    if (!employee) {
+    if (!participant) {
       return res.status(400).json({
-        message: "Employee is required",
+        message: "Participant is required",
       });
     }
 
-    if (!mongoose.Types.ObjectId.isValid(employee)) {
+    if (!mongoose.Types.ObjectId.isValid(participant)) {
       return res.status(400).json({
-        message: "Invalid employee ID",
+        message: "Invalid participant ID",
       });
     }
 
-    const employeeUser = await UserModel.findById(employee);
+    // Prevent conversations with yourself
+    if (currentUser._id.toString() === participant.toString()) {
+      return res.status(400).json({
+        message: "You cannot create a conversation with yourself",
+      });
+    }
 
-    if (!employeeUser) {
+    // Find selected participant
+    const targetUser = await UserModel.findById(participant);
+
+    if (!targetUser) {
       return res.status(404).json({
-        message: "Employee not found",
+        message: "Participant not found",
       });
     }
 
-    if (!isEmployee(employeeUser)) {
-      return res.status(400).json({
-        message: "Selected user is not an employee",
+    const currentUserIsCustomer = currentUser.role === "CUSTOMER";
+
+    const targetUserIsCustomer = targetUser.role === "CUSTOMER";
+
+    // Customer ↔ Customer is not allowed
+    if (currentUserIsCustomer && targetUserIsCustomer) {
+      return res.status(403).json({
+        message: "Customers cannot start conversations with other customers",
       });
     }
 
+    // Check if conversation already exists
     let conversation = await ConversationModel.findOne({
-      customer,
-      employee,
+      participants: {
+        $all: [currentUser._id, participant],
+      },
     });
 
     if (conversation) {
+      conversation = await ConversationModel.findById(
+        conversation._id,
+      ).populate(
+        "participants",
+        "firstname lastname username role profileImage",
+      );
+
       return res.status(200).json({
         data: conversation,
         message: "Conversation already exists",
       });
     }
 
+    // Create new conversation
     conversation = await ConversationModel.create({
-      customer,
-      employee,
+      participants: [currentUser._id, participant],
     });
 
-    conversation = await ConversationModel.findById(conversation._id)
-      .populate("customer", "firstname lastname username role")
-      .populate("employee", "firstname lastname username role");
+    // Populate participants
+    conversation = await ConversationModel.findById(conversation._id).populate(
+      "participants",
+      "firstname lastname username role profileImage",
+    );
 
     return res.status(201).json({
       data: conversation,
@@ -142,9 +152,10 @@ const getConversation = async (req, res) => {
       });
     }
 
-    const conversation = await ConversationModel.findById(id)
-      .populate("customer", "firstname lastname username role")
-      .populate("employee", "firstname lastname username role");
+    const conversation = await ConversationModel.findById(id).populate(
+      "participants",
+      "firstname lastname username role profileImage",
+    );
 
     if (!conversation) {
       return res.status(404).json({
@@ -198,7 +209,7 @@ const getMessages = async (req, res) => {
     const messages = await MessageModel.find({
       conversation: id,
     })
-      .populate("sender", "firstname lastname username role")
+      .populate("sender", "firstname lastname username role profileImage")
       .sort({
         createdAt: 1,
       });
@@ -218,10 +229,10 @@ const getMessages = async (req, res) => {
 
 const sendMessage = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id: conversationId } = req.params;
     const { message } = req.body;
 
-    if (!mongoose.Types.ObjectId.isValid(id)) {
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
       return res.status(400).json({
         message: "Invalid conversation ID",
       });
@@ -239,7 +250,7 @@ const sendMessage = async (req, res) => {
       });
     }
 
-    const conversation = await ConversationModel.findById(id);
+    const conversation = await ConversationModel.findById(conversationId);
 
     if (!conversation) {
       return res.status(404).json({
@@ -261,10 +272,15 @@ const sendMessage = async (req, res) => {
 
     const sender = req.user._id;
 
-    const receiver =
-      conversation.customer.toString() === sender.toString()
-        ? conversation.employee
-        : conversation.customer;
+    const receiver = conversation.participants.find(
+      (participant) => participant.toString() !== sender.toString(),
+    );
+
+    if (!receiver) {
+      return res.status(400).json({
+        message: "Conversation receiver not found",
+      });
+    }
 
     const newMessage = await MessageModel.create({
       conversation: conversation._id,
@@ -281,15 +297,15 @@ const sendMessage = async (req, res) => {
     await NotificationModel.create({
       sender,
       recipient: receiver,
+      conversation: conversationId,
       type: "MESSAGE",
       title: "New Message",
       message: message.trim(),
       isRead: false,
     });
-
     const populatedMessage = await MessageModel.findById(
       newMessage._id,
-    ).populate("sender", "firstname lastname username role");
+    ).populate("sender", "firstname lastname username role profileImage");
 
     return res.status(201).json({
       data: populatedMessage,
@@ -345,6 +361,80 @@ const markMessageAsRead = async (req, res) => {
   }
 };
 
+const markConversationAsRead = async (req, res) => {
+  try {
+    const { id: conversationId } = req.params;
+    const userId = req.user._id;
+
+    if (!mongoose.Types.ObjectId.isValid(conversationId)) {
+      return res.status(400).json({
+        message: "Invalid conversation ID",
+      });
+    }
+
+    const conversation = await ConversationModel.findById(conversationId);
+
+    if (!conversation) {
+      return res.status(404).json({
+        message: "Conversation not found",
+      });
+    }
+
+    const isParticipant = conversation.participants.some(
+      (participant) => participant.toString() === userId.toString(),
+    );
+
+    if (!isParticipant) {
+      return res.status(403).json({
+        message: "You are not a participant in this conversation",
+      });
+    }
+
+    const messageResult = await MessageModel.updateMany(
+      {
+        conversation: conversationId,
+        receiver: userId,
+        read: false,
+      },
+      {
+        $set: {
+          read: true,
+        },
+      },
+    );
+
+    const notificationResult = await NotificationModel.updateMany(
+      {
+        conversation: conversationId,
+        recipient: userId,
+        type: "MESSAGE",
+        isRead: false,
+      },
+      {
+        $set: {
+          isRead: true,
+        },
+      },
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Conversation marked as read",
+      data: {
+        messagesUpdated: messageResult.modifiedCount,
+        notificationsUpdated: notificationResult.modifiedCount,
+      },
+    });
+  } catch (error) {
+    console.error("MARK CONVERSATION AS READ ERROR:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to mark conversation as read",
+    });
+  }
+};
+
 export default {
   getConversations,
   createConversation,
@@ -352,4 +442,5 @@ export default {
   getMessages,
   sendMessage,
   markMessageAsRead,
+  markConversationAsRead,
 };

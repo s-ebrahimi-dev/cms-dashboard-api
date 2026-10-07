@@ -1,7 +1,6 @@
 import express from "express";
 import cors from "cors";
 import userRouter from "./routes/users.js";
-import messageRouter from "./routes/messages.js"
 import conversationRouter from "./routes/conversations.js";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
@@ -32,7 +31,6 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api/users", userRouter);
-app.use("/api/users", messageRouter);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/conversations", conversationRouter);
 app.use((req, res) => {

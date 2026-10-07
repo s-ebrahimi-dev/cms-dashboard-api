@@ -2,18 +2,19 @@ import mongoose from "mongoose";
 
 const conversationSchema = new mongoose.Schema(
   {
-    customer: {
+   participants: {
+  type: [
+    {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-
-    employee: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-
+  ],
+  validate: {
+    validator: (participants) => participants.length === 2,
+    message: "A conversation must have exactly two participants",
+  },
+},
     status: {
       type: String,
       enum: ["OPEN", "CLOSED"],
@@ -35,11 +36,6 @@ const conversationSchema = new mongoose.Schema(
   {
     timestamps: true,
   },
-);
-
-conversationSchema.index(
-  { customer: 1, employee: 1 },
-  { unique: true },
 );
 
 const ConversationModel = mongoose.model(
