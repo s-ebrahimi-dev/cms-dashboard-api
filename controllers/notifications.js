@@ -4,15 +4,36 @@ const getNotifications = async (req, res) => {
   try {
     const userId = req.user._id;
 
-      const notifications = await NotificationModel.find({
-  recipient: userId,
-})
-  .populate("sender", "username role")
-  .sort({ createdAt: -1 });
+    const notifications = await NotificationModel.find({
+      recipient: userId,
+    })
+      .populate("sender", "username role profileImage")
+      .sort({ createdAt: -1 });
+
+    const formattedNotifications = notifications.map(
+      (notification) => {
+        const notificationObject = notification.toObject();
+
+        if (notificationObject.sender) {
+          const sender = notificationObject.sender;
+
+          notificationObject.sender = {
+            _id: sender._id,
+            username: sender.username,
+            role: sender.role,
+            hasProfileImage: Boolean(
+              sender.profileImage?.data,
+            ),
+          };
+        }
+
+        return notificationObject;
+      },
+    );
 
     return res.status(200).json({
       success: true,
-      notifications,
+      notifications: formattedNotifications,
     });
   } catch (error) {
     console.error("Get notifications error:", error);
