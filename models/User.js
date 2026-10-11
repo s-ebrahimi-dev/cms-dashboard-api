@@ -55,7 +55,12 @@ const schema = new mongoose.Schema(
       ],
       default: "CUSTOMER",
     },
-     profileImage: {
+    maxConcurrentVehicles: {
+      type: Number,
+      min: 1,
+      default: 1,
+    },
+    profileImage: {
       data: Buffer,
       contentType: String,
     },

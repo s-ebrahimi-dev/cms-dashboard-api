@@ -6,8 +6,9 @@ import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import connectDB from "./configs/db.js";
 import notificationRouter from "./routes/notifications.js";
-
-
+import appointmentRouter from "./routes/appointment.js";
+import vehicleRouter from "./routes/vehicles.js";
+import serviceRouter from "./routes/services.js";
 dotenv.config();
 
 const app = express();
@@ -33,6 +34,10 @@ app.get("/health", (req, res) => {
 app.use("/api/users", userRouter);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/conversations", conversationRouter);
+app.use("/api/appointments", appointmentRouter);
+app.use("/api/vehicles", vehicleRouter);
+app.use("/api/services", serviceRouter);
+
 app.use((req, res) => {
   res.status(404).json({
     message: "Route Not Found !!",

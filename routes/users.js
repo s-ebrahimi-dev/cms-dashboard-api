@@ -29,7 +29,12 @@ router.get(
   "/profile-image/:id",
   controller.getProfileImage
 );
-router.get("/", controller.getAllUsers);
+router.get(
+  "/",
+  middleware.checkAuth,
+  middleware.checkRole("RECEPTIONIST"),
+  controller.getAllUsers,
+);
 router.get(
   "/:id",
   middleware.checkAdmin,

@@ -78,6 +78,25 @@ const checkAdmin = async (req, res, next) => {
   });
 };
 
+const checkRole = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Authentication required.",
+      });
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        message: "You are not authorized to access this route.",
+      });
+    }
+
+    next();
+  };
+};
+
+
 const checkObjectId = (req, res, next) => {
    const { id } = req.params;
       if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -88,4 +107,4 @@ const checkObjectId = (req, res, next) => {
   }
   next()
 }
-export default {checkAuth, checkAdmin, checkObjectId };
+export default {checkAuth, checkAdmin, checkObjectId, checkRole };

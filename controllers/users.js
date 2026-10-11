@@ -27,14 +27,32 @@ const getMe = async (req, res) => {
   }
 };
 
-const getAllUsers = async (req, res) => {
-  const users = await UserModel.find().sort({ createdAt: -1 });
 
-  return res.status(200).json({
-    data: users,
-    message: "Users retrieved successfully :))",
-  });
+const getAllUsers = async (req, res) => {
+  try {
+    const filter = {};
+
+    if (req.query.role) {
+      filter.role = req.query.role.toUpperCase();
+    }
+
+    const users = await UserModel.find(filter)
+      .select("firstname lastname username email phone role")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      data: users,
+      message: "Users retrieved successfully.",
+    });
+  } catch (error) {
+    console.error("Failed to retrieve users:", error);
+
+    return res.status(500).json({
+      message: "Failed to retrieve users.",
+    });
+  }
 };
+
 
 const getOneUser = async (req, res) => {
   const { id } = req.params;
