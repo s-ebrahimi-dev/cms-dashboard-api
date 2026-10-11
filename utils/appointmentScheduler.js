@@ -1,4 +1,4 @@
-import { Temporal } from "@js-temporal/polyfill";
+import {Temporal} from "@js-temporal/polyfill";
 import mongoose from "mongoose";
 import Appointment from "../models/Appointment.js";
 import Service from "../models/Service.js";
