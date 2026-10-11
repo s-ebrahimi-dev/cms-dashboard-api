@@ -7,6 +7,7 @@ import Vehicle from "../models/Vehicle.js";
 import Service from "../models/Service.js";
 import Appointment from "../models/Appointment.js";
 import WorkshopSettings from "../models/WorkshopSettings.js";
+import { findEarliestAvailableSlot } from "../utils/appointmentScheduler.js";
 
 import {
   ACTIVE_STATUSES,
@@ -137,7 +138,9 @@ const parseWorkshopDateTime = (date, time, timezone) => {
 // POST /api/appointments
 // Register an appointment
 // --------------------------------------------------
-
+const isTransientTransactionError = (error) =>
+  error?.hasErrorLabel?.("TransientTransactionError") ||
+  error?.hasErrorLabel?.("UnknownTransactionCommitResult");
 const createAppointment = async (req, res) => {
   try {
     if (req.user?.role !== "RECEPTIONIST") {
@@ -266,63 +269,78 @@ if (typeof notes === "string" && notes.length > 2000) {
       return res.status(500).json({ message: workshop.error });
     }
 
-    const { settings, openingMinutes, closingMinutes } = workshop;
+    const { settings } = workshop;
 
-    // Check the requested instant against workshop-local opening hours.
-    const localStart = Temporal.Instant.from(
+    // Use the selected date as the earliest acceptable workshop-local date.
+    const preferredDate = Temporal.Instant.from(
       appointmentDate.toISOString(),
-    ).toZonedDateTimeISO(settings.timezone);
+    )
+      .toZonedDateTimeISO(settings.timezone)
+      .toPlainDate()
+      .toString();
 
-    const startMinute = localStart.hour * 60 + localStart.minute;
+    const session = await mongoose.startSession();
+    let createdAppointment;
 
-    if (
-      localStart.second !== 0 ||
-      localStart.millisecond !== 0 ||
-      startMinute < openingMinutes ||
-      startMinute + duration > closingMinutes ||
-      (startMinute - openingMinutes) % settings.slotIntervalMinutes !== 0
-    ) {
-      return res.status(400).json({
-        message:
-          "The selected time is outside opening hours or does not match the booking interval.",
+    try {
+      await session.withTransaction(async () => {
+        const slot = await findEarliestAvailableSlot({
+          serviceId: selectedService._id,
+          fromDate: preferredDate,
+          session,
+          lock: true,
+        });
+
+        if (!slot) {
+          const error = new Error(
+            "No available appointment slot was found in the next 90 days.",
+          );
+          error.statusCode = 409;
+          throw error;
+        }
+
+        const [appointment] = await Appointment.create(
+          [
+            {
+              customer: customerUser._id,
+              vehicle: customerVehicle._id,
+              service: slot.service._id,
+              receptionist: req.user._id,
+              createdBy: req.user._id,
+              assignedTechnician: null,
+              scheduledAt: slot.scheduledAt,
+              scheduledEndAt: slot.scheduledEndAt,
+              servicePrice: slot.servicePrice,
+              estimatedDurationMinutes:
+                slot.estimatedDurationMinutes,
+              notes: typeof notes === "string" ? notes.trim() : "",
+            },
+          ],
+          { session },
+        );
+
+        createdAppointment = appointment;
+      });
+    } catch (error) {
+      if (error.statusCode === 409) {
+        return res.status(409).json({
+          message: error.message,
+        });
+      }
+
+      throw error;
+    } finally {
+      await session.endSession();
+    }
+
+    const appointment = createdAppointment;
+
+    if (!appointment) {
+      return res.status(500).json({
+        message: "The appointment could not be created.",
       });
     }
 
-    const scheduledEndAt = new Date(
-      appointmentDate.getTime() + duration * 60_000,
-    );
-
-    const overlappingAppointments = await getOverlappingAppointments(
-      appointmentDate,
-      scheduledEndAt,
-    );
-
-    const capacity = checkBookingCapacity({
-      service: selectedService,
-      start: appointmentDate,
-      end: scheduledEndAt,
-      appointments: overlappingAppointments,
-      workshopCapacity: settings.maxConcurrentVehicles,
-    });
-
-    if (!capacity.available) {
-      return res.status(capacity.status).json({
-        message: capacity.message,
-      });
-    }
-
-    const appointment = await Appointment.create({
-      customer: customerUser._id,
-      vehicle: customerVehicle._id,
-      service: selectedService._id,
-      receptionist: req.user._id,
-      assignedTechnician: null,
-      scheduledAt: appointmentDate,
-      scheduledEndAt,
-      servicePrice: selectedService.basePrice,
-      estimatedDurationMinutes: duration,
-      notes: typeof notes === "string" ? notes.trim() : "",
-    });
 
     const populatedAppointment = await Appointment.findById(
       appointment._id,

@@ -21,10 +21,39 @@ const appointmentSchema = new mongoose.Schema(
       required: true,
     },
 
+    // The receptionist responsible for this appointment.
+    // Customer-created requests may not have one yet.
     receptionist: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      default: null,
+    },
+
+    // User who initiated the appointment: customer or receptionist.
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
       required: true,
+      index: true,
+    },
+
+    // Receptionist who accepted or rejected the request.
+    reviewedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    reviewedAt: {
+      type: Date,
+      default: null,
+    },
+
+    rejectionReason: {
+      type: String,
+      trim: true,
+      maxlength: 500,
+      default: "",
     },
 
     assignedTechnician: {
@@ -61,6 +90,7 @@ const appointmentSchema = new mongoose.Schema(
       enum: [
         "PENDING",
         "CONFIRMED",
+        "REJECTED",
         "IN_PROGRESS",
         "COMPLETED",
         "CANCELLED",
@@ -135,6 +165,9 @@ appointmentSchema.index({
   assignedTechnician: 1,
   scheduledAt: 1,
 });
+
+// Receptionist review queue.
+appointmentSchema.index({ status: 1, createdAt: 1 });
 
 const Appointment = mongoose.model("Appointment", appointmentSchema);
 
