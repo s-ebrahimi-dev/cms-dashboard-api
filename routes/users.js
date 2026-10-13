@@ -32,13 +32,14 @@ router.get(
 router.get(
   "/",
   middleware.checkAuth,
-  middleware.checkRole("RECEPTIONIST"),
+  middleware.checkRole("ADMIN", "RECEPTIONIST"),
   controller.getAllUsers,
 );
 router.get(
   "/:id",
-  middleware.checkAdmin,
+  middleware.checkAuth,
   middleware.checkObjectId,
+  middleware.checkRole("RECEPTIONIST"),
   controller.getOneUser,
 );
 
