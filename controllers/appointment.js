@@ -7,7 +7,7 @@ import Vehicle from "../models/Vehicle.js";
 import Service from "../models/Service.js";
 import Appointment from "../models/Appointment.js";
 import WorkshopSettings from "../models/WorkshopSettings.js";
-import { findEarliestAvailableSlot } from "../utils/appointmentScheduler.js";
+
 
 import {
   ACTIVE_STATUSES,
@@ -61,12 +61,19 @@ const getWorkshopSettings = async () => {
   return { settings, openingMinutes, closingMinutes };
 };
 
-const getOverlappingAppointments = (start, end) =>
-  Appointment.find({
+const getOverlappingAppointments = (start, end, session) => {
+  let query = Appointment.find({
     status: { $in: ACTIVE_STATUSES },
     scheduledAt: { $lt: end },
     scheduledEndAt: { $gt: start },
   }).select("service scheduledAt scheduledEndAt status");
+
+  if (session) {
+    query = query.session(session);
+  }
+
+  return query;
+};
 
 const checkBookingCapacity = ({
   service,
@@ -151,21 +158,23 @@ const createAppointment = async (req, res) => {
 
     const { customer, vehicle, service, scheduledAt, notes } =
       req.body || {};
-if (
-  notes !== undefined &&
-  notes !== null &&
-  typeof notes !== "string"
-) {
-  return res.status(400).json({
-    message: "Notes must be a string.",
-  });
-}
 
-if (typeof notes === "string" && notes.length > 2000) {
-  return res.status(400).json({
-    message: "Notes cannot exceed 2000 characters.",
-  });
-}
+    if (
+      notes !== undefined &&
+      notes !== null &&
+      typeof notes !== "string"
+    ) {
+      return res.status(400).json({
+        message: "Notes must be a string.",
+      });
+    }
+
+    if (typeof notes === "string" && notes.length > 2000) {
+      return res.status(400).json({
+        message: "Notes cannot exceed 2000 characters.",
+      });
+    }
+
     if (!customer || !vehicle || !service || !scheduledAt) {
       return res.status(400).json({
         message:
@@ -188,7 +197,7 @@ if (typeof notes === "string" && notes.length > 2000) {
       }
     }
 
-    // Require a timezone-aware ISO timestamp from the client.
+    // Require an ISO timestamp containing a timezone.
     if (
       typeof scheduledAt !== "string" ||
       !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(
@@ -256,7 +265,9 @@ if (typeof notes === "string" && notes.length > 2000) {
       !Number.isInteger(duration) ||
       duration < 1 ||
       !Number.isFinite(selectedService.basePrice) ||
-      selectedService.basePrice < 0
+      selectedService.basePrice < 0 ||
+      !Number.isInteger(selectedService.maxConcurrentBookings) ||
+      selectedService.maxConcurrentBookings < 1
     ) {
       return res.status(500).json({
         message: "The selected service has invalid configuration.",
@@ -266,36 +277,120 @@ if (typeof notes === "string" && notes.length > 2000) {
     const workshop = await getWorkshopSettings();
 
     if (workshop.error) {
-      return res.status(500).json({ message: workshop.error });
+      return res.status(500).json({
+        message: workshop.error,
+      });
     }
 
-    const { settings } = workshop;
+    const { settings, openingMinutes, closingMinutes } = workshop;
 
-    // Use the selected date as the earliest acceptable workshop-local date.
-    const preferredDate = Temporal.Instant.from(
+    // Convert the submitted instant to the workshop's local date and time.
+    const localDateTime = Temporal.Instant.from(
       appointmentDate.toISOString(),
-    )
-      .toZonedDateTimeISO(settings.timezone)
-      .toPlainDate()
-      .toString();
+    ).toZonedDateTimeISO(settings.timezone);
+
+    const preferredDate = localDateTime.toPlainDate().toString();
+
+    const hours = localDateTime.hour;
+    const minutes = localDateTime.minute;
+
+    const localTime =
+      `${String(hours).padStart(2, "0")}:` +
+      `${String(minutes).padStart(2, "0")}`;
+
+    // Reject timestamps that cannot represent a valid workshop-local time.
+    const validatedLocalTime = parseWorkshopDateTime(
+      preferredDate,
+      localTime,
+      settings.timezone,
+    );
+
+    if (
+      !validatedLocalTime ||
+      validatedLocalTime.epochMilliseconds !== appointmentDate.getTime()
+    ) {
+      return res.status(400).json({
+        message: "The selected appointment time is invalid.",
+      });
+    }
+
+    const selectedStartMinutes = hours * 60 + minutes;
+
+    // The start must be on the configured slot interval.
+    const alignsWithSlotInterval =
+      (selectedStartMinutes - openingMinutes) %
+        settings.slotIntervalMinutes ===
+      0;
+
+    if (
+      selectedStartMinutes < openingMinutes ||
+      selectedStartMinutes + duration > closingMinutes ||
+      !alignsWithSlotInterval
+    ) {
+      return res.status(409).json({
+        message:
+          "The selected time is not a valid appointment slot.",
+      });
+    }
+
+    const scheduledStart = appointmentDate;
+    const scheduledEnd = new Date(
+      scheduledStart.getTime() + duration * 60_000,
+    );
 
     const session = await mongoose.startSession();
     let createdAppointment;
 
     try {
       await session.withTransaction(async () => {
-        const slot = await findEarliestAvailableSlot({
-          serviceId: selectedService._id,
-          fromDate: preferredDate,
-          session,
-          lock: true,
-        });
+        // Acquire the same workshop-document lock used by the scheduler.
+        // Concurrent booking transactions must contend on this document.
+        const lockedSettings = await WorkshopSettings.findOneAndUpdate(
+          { _id: settings._id },
+          { $inc: { bookingLockVersion: 1 } },
+          {
+            new: true,
+            session,
+          },
+        );
 
-        if (!slot) {
+        if (!lockedSettings) {
           const error = new Error(
-            "No available appointment slot was found in the next 90 days.",
+            "Workshop settings have not been configured.",
+          );
+          error.statusCode = 500;
+          throw error;
+        }
+
+        // Recheck that the selected slot is still in the future.
+        if (scheduledStart <= new Date()) {
+          const error = new Error(
+            "The selected appointment time is no longer in the future.",
           );
           error.statusCode = 409;
+          throw error;
+        }
+
+        // Read overlapping bookings inside the same transaction.
+        const overlappingAppointments =
+          await getOverlappingAppointments(
+            scheduledStart,
+            scheduledEnd,
+            session,
+          );
+
+        // Include the proposed appointment when calculating concurrency.
+        const capacity = checkBookingCapacity({
+          service: selectedService,
+          start: scheduledStart,
+          end: scheduledEnd,
+          appointments: overlappingAppointments,
+          workshopCapacity: lockedSettings.maxConcurrentVehicles,
+        });
+
+        if (!capacity.available) {
+          const error = new Error(capacity.message);
+          error.statusCode = capacity.status;
           throw error;
         }
 
@@ -304,15 +399,14 @@ if (typeof notes === "string" && notes.length > 2000) {
             {
               customer: customerUser._id,
               vehicle: customerVehicle._id,
-              service: slot.service._id,
+              service: selectedService._id,
               receptionist: req.user._id,
               createdBy: req.user._id,
               assignedTechnician: null,
-              scheduledAt: slot.scheduledAt,
-              scheduledEndAt: slot.scheduledEndAt,
-              servicePrice: slot.servicePrice,
-              estimatedDurationMinutes:
-                slot.estimatedDurationMinutes,
+              scheduledAt: scheduledStart,
+              scheduledEndAt: scheduledEnd,
+              servicePrice: selectedService.basePrice,
+              estimatedDurationMinutes: duration,
               notes: typeof notes === "string" ? notes.trim() : "",
             },
           ],
@@ -322,8 +416,8 @@ if (typeof notes === "string" && notes.length > 2000) {
         createdAppointment = appointment;
       });
     } catch (error) {
-      if (error.statusCode === 409) {
-        return res.status(409).json({
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({
           message: error.message,
         });
       }
@@ -333,17 +427,14 @@ if (typeof notes === "string" && notes.length > 2000) {
       await session.endSession();
     }
 
-    const appointment = createdAppointment;
-
-    if (!appointment) {
+    if (!createdAppointment) {
       return res.status(500).json({
         message: "The appointment could not be created.",
       });
     }
 
-
     const populatedAppointment = await Appointment.findById(
-      appointment._id,
+      createdAppointment._id,
     )
       .populate("customer", "firstname lastname username email phone")
       .populate(
@@ -541,7 +632,207 @@ const getAvailableSlots = async (req, res) => {
   }
 };
 
+const TECHNICIAN_ROLES = [
+  "MECHANIC",
+  "OIL_TECHNICIAN",
+  "BODY_REPAIR",
+  "DETAILING_TECHNICIAN",
+  "WASH_TECHNICIAN",
+];
+
+// --------------------------------------------------
+// PATCH /api/appointments/:id/start
+// Start an assigned appointment
+// --------------------------------------------------
+const startAppointment = async (req, res) => {
+  try {
+    if (!TECHNICIAN_ROLES.includes(req.user?.role)) {
+      return res.status(403).json({
+        message: "Only technicians can start appointments.",
+      });
+    }
+
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        message: "Invalid appointment ID.",
+      });
+    }
+
+    const startedAt = new Date();
+
+    // Atomic transition: only a confirmed appointment assigned
+    // to this technician can be started.
+    const appointment = await Appointment.findOneAndUpdate(
+      {
+        _id: id,
+        assignedTechnician: req.user._id,
+        status: "CONFIRMED",
+        startedAt: null,
+        completedAt: null,
+      },
+      {
+        $set: {
+          status: "IN_PROGRESS",
+          startedAt,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!appointment) {
+      const existingAppointment = await Appointment.findById(id)
+        .select("assignedTechnician status");
+
+      if (!existingAppointment) {
+        return res.status(404).json({
+          message: "Appointment not found.",
+        });
+      }
+
+      if (
+        String(existingAppointment.assignedTechnician) !==
+        String(req.user._id)
+      ) {
+        return res.status(403).json({
+          message: "This appointment is not assigned to you.",
+        });
+      }
+
+      return res.status(409).json({
+        message:
+          "This appointment cannot be started in its current state.",
+      });
+    }
+
+    return res.status(200).json({
+      data: appointment,
+      message: "Appointment started successfully.",
+    });
+  } catch (error) {
+    console.error("START APPOINTMENT ERROR:", error);
+
+    return res.status(500).json({
+      message: "Failed to start appointment.",
+    });
+  }
+};
+
+// --------------------------------------------------
+// PATCH /api/appointments/:id/complete
+// Complete an appointment
+// --------------------------------------------------
+const completeAppointment = async (req, res) => {
+  try {
+    if (!TECHNICIAN_ROLES.includes(req.user?.role)) {
+      return res.status(403).json({
+        message: "Only technicians can complete appointments.",
+      });
+    }
+
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        message: "Invalid appointment ID.",
+      });
+    }
+
+    const completedAt = new Date();
+
+    // Read the start time so we can calculate actual duration.
+    const existingAppointment = await Appointment.findOne({
+      _id: id,
+      assignedTechnician: req.user._id,
+      status: "IN_PROGRESS",
+      startedAt: { $type: "date" },
+      completedAt: null,
+    }).select("startedAt");
+
+    if (!existingAppointment) {
+      const appointment = await Appointment.findById(id)
+        .select("assignedTechnician status");
+
+      if (!appointment) {
+        return res.status(404).json({
+          message: "Appointment not found.",
+        });
+      }
+
+      if (String(appointment.assignedTechnician) !== String(req.user._id)) {
+        return res.status(403).json({
+          message: "This appointment is not assigned to you.",
+        });
+      }
+
+      return res.status(409).json({
+        message:
+          "Only an appointment in progress can be completed.",
+      });
+    }
+
+    const startedAt = existingAppointment.startedAt;
+
+    if (completedAt <= startedAt) {
+      return res.status(409).json({
+        message: "The completion time must be after the start time.",
+      });
+    }
+
+    const actualDurationMinutes = Math.ceil(
+      (completedAt.getTime() - startedAt.getTime()) / 60_000,
+    );
+
+    // Recheck the current state in the update itself. This prevents
+    // a second concurrent completion request from succeeding.
+    const completedAppointment = await Appointment.findOneAndUpdate(
+      {
+        _id: id,
+        assignedTechnician: req.user._id,
+        status: "IN_PROGRESS",
+        startedAt,
+        completedAt: null,
+      },
+      {
+        $set: {
+          status: "COMPLETED",
+          completedAt,
+          actualDurationMinutes,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      },
+    );
+
+    if (!completedAppointment) {
+      return res.status(409).json({
+        message:
+          "The appointment changed before it could be completed. Refresh and try again.",
+      });
+    }
+
+    return res.status(200).json({
+      data: completedAppointment,
+      message: "Appointment completed successfully.",
+    });
+  } catch (error) {
+    console.error("COMPLETE APPOINTMENT ERROR:", error);
+
+    return res.status(500).json({
+      message: "Failed to complete appointment.",
+    });
+  }
+};
+
 export default {
   createAppointment,
   getAvailableSlots,
+  startAppointment,
+  completeAppointment,
 };

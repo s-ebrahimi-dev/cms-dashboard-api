@@ -21,4 +21,19 @@ router.post(
   appointmentController.createAppointment,
 );
 
+// Start a confirmed appointment assigned to the logged-in technician.
+router.patch(
+  "/:id/start",
+  middleware.checkAuth,
+  appointmentController.startAppointment,
+);
+
+// Complete an appointment after technician confirmation.
+router.patch(
+  "/:id/complete",
+  middleware.checkAuth,
+  appointmentController.completeAppointment,
+);
+
+
 export default router;
