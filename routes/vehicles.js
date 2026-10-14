@@ -12,4 +12,10 @@ router.get(
   controller.getCustomerVehicles,
 );
 
+router.post(
+  "/",
+  middleware.checkAuth,
+  middleware.checkRole("RECEPTIONIST"),
+  controller.createVehicle,
+);
 export default router;

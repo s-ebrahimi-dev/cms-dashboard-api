@@ -43,11 +43,6 @@ const getCustomerVehicles = async (req, res) => {
   }
 };
 
-
-import mongoose from "mongoose";
-import UserModel from "../models/User.js";
-import Vehicle from "../models/Vehicle.js";
-
 const createVehicle = async (req, res) => {
   try {
     const {
