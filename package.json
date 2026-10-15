@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "AutoCare CMS backend API",
   "main": "server.js",
-   "scripts": {
-    "dev": "node --watch-path=./server.js  --watch-path=./validator  --watch-path=./routes --watch-path=./controllers --watch-path=./models --watch-path=./middlewares --watch-path=./utils server.js",
+  "scripts": {
+    "dev": "node --watch server.js",
     "start": "node server.js"
   },
   "keywords": [],

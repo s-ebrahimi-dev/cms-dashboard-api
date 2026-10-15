@@ -617,7 +617,7 @@ const getAppointments = async (req, res) => {
     const appointments = await Appointment.find()
       .populate(
         "customer",
-        "firstname lastname username email phone profileImage",
+        "firstname lastname username email phone profileImage.contentType",
       )
       .populate("vehicle", "make model year licensePlate mileage color")
       .populate("service", "name category basePrice")
@@ -626,8 +626,27 @@ const getAppointments = async (req, res) => {
       .sort({ scheduledAt: -1 })
       .lean();
 
+const formattedAppointments = appointments.map((appointment) => {
+  if (!appointment.customer) {
+    return appointment;
+  }
+
+  const hasProfileImage = Boolean(
+    appointment.customer.profileImage?.contentType,
+  );
+
+  return {
+    ...appointment,
+    customer: {
+      ...appointment.customer,
+      hasProfileImage,
+      profileImage: undefined,
+    },
+  };
+});
+
     return res.status(200).json({
-      data: appointments,
+      data: formattedAppointments,
       message: "Appointments retrieved successfully.",
     });
   } catch (error) {
