@@ -22,20 +22,16 @@ const registerSchema = joi.object({
         "Username can only contain letters, numbers, and underscores",
     }),
 
-  email: joi
-    .string().
-    trim().
-    email()
-    .required(),
+  email: joi.string().trim().email().required(),
 
   phone: joi
-  .string()
-  .trim()
-  .pattern(/^[0-9]{11}$/)
-  .required()
-  .messages({
-    "string.pattern.base": "Phone number must be exactly 11 digits",
-  }),
+    .string()
+    .trim()
+    .pattern(/^[0-9]{11}$/)
+    .required()
+    .messages({
+      "string.pattern.base": "Phone number must be exactly 11 digits",
+    }),
   password: joi
     .string()
     .min(8)
@@ -52,6 +48,7 @@ const registerSchema = joi.object({
     "any.required": "Confirm password is required",
   }),
 });
+
 const createUserSchema = joi.object({
   firstname: joi.string().trim().min(2).max(30).required(),
 
@@ -69,20 +66,17 @@ const createUserSchema = joi.object({
         "Username can only contain letters, numbers, and underscores",
     }),
 
-  email: joi
-    .string().
-    trim().
-    email()
-    .required(),
+  email: joi.string().trim().email().required(),
 
   phone: joi
-  .string()
-  .trim()
-  .pattern(/^[0-9]{11}$/)
-  .required()
-  .messages({
-    "string.pattern.base": "Phone number must be exactly 11 digits",
-  }),
+    .string()
+    .trim()
+    .pattern(/^[0-9]{11}$/)
+    .required()
+    .messages({
+      "string.pattern.base": "Phone number must be exactly 11 digits",
+    }),
+
   password: joi
     .string()
     .min(8)
@@ -98,18 +92,32 @@ const createUserSchema = joi.object({
     "any.only": "Passwords do not match",
     "any.required": "Confirm password is required",
   }),
-  role: joi.string()
-  .valid(
-    "ADMIN",
-    "CUSTOMER",
-    "RECEPTIONIST",
-    "MECHANIC",
-    "OIL_TECHNICIAN",
-    "BODY_REPAIR",
-    "DETAILING_TECHNICIAN",
-    "WASH_TECHNICIAN"
-  )
-  .required()
+
+  role: joi
+    .string()
+    .valid(
+      "ADMIN",
+      "CUSTOMER",
+      "RECEPTIONIST",
+      "MECHANIC",
+      "OIL_TECHNICIAN",
+      "BODY_REPAIR",
+      "DETAILING_TECHNICIAN",
+      "WASH_TECHNICIAN",
+    )
+    .required(),
+
+  maxConcurrentVehicles: joi.when("role", {
+    is: joi.valid(
+      "MECHANIC",
+      "OIL_TECHNICIAN",
+      "BODY_REPAIR",
+      "DETAILING_TECHNICIAN",
+      "WASH_TECHNICIAN",
+    ),
+    then: joi.number().integer().min(1).default(1),
+    otherwise: joi.forbidden(),
+  }),
 });
 
 export default { loginSchema, registerSchema, createUserSchema };

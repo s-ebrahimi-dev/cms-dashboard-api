@@ -30,7 +30,17 @@ const serviceSchema = new mongoose.Schema(
         "OTHER",
       ],
     },
-
+    requiredTechnicianRole: {
+      type: String,
+      required: true,
+      enum: [
+        "MECHANIC",
+        "OIL_TECHNICIAN",
+        "BODY_REPAIR",
+        "DETAILING_TECHNICIAN",
+        "WASH_TECHNICIAN",
+      ],
+    },
     basePrice: {
       type: Number,
       required: true,

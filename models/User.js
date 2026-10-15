@@ -58,7 +58,7 @@ const schema = new mongoose.Schema(
     maxConcurrentVehicles: {
       type: Number,
       min: 1,
-      default: 1,
+      
     },
     profileImage: {
       data: Buffer,

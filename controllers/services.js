@@ -5,8 +5,8 @@ const getActiveServices = async (req, res) => {
   try {
     const services = await Service.find({ isActive: true })
       .select(
-        "name description category basePrice estimatedDurationMinutes maxConcurrentBookings",
-      )
+  "name description category requiredTechnicianRole basePrice estimatedDurationMinutes maxConcurrentBookings",
+)
       .sort({ name: 1 });
 
     return res.status(200).json({

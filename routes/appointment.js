@@ -7,6 +7,13 @@ const router = express.Router();
 
 // Get available appointment slots for a selected service and date.
 router.get(
+  "/",
+  middleware.checkAuth,
+  middleware.checkRole("RECEPTIONIST"),
+  appointmentController.getAppointments,
+);
+
+router.get(
   "/availability",
   middleware.checkAuth,
   middleware.checkRole("RECEPTIONIST"),

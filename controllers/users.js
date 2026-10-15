@@ -4,6 +4,13 @@ import validator from "../validator/users.js";
 import jwt from "jsonwebtoken";
 import UserModel from "../models/User.js";
 
+const TECHNICIAN_ROLES = [
+  "MECHANIC",
+  "OIL_TECHNICIAN",
+  "BODY_REPAIR",
+  "DETAILING_TECHNICIAN",
+  "WASH_TECHNICIAN",
+];
 
 const getMe = async (req, res) => {
   console.log("🔥 GET ME CONTROLLER EXECUTED");
@@ -177,7 +184,7 @@ const createUser = async (req, res) => {
       });
     }
 
-    const { firstname, lastname, username, email, phone, password, role } =
+    const { firstname, lastname, username, email, phone, password, role, maxConcurrentVehicles, } =
       value;
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -190,7 +197,11 @@ const createUser = async (req, res) => {
       phone,
       password: hashedPassword,
       role,
-    };
+    }
+
+    if (TECHNICIAN_ROLES.includes(role)) {
+  newUser.maxConcurrentVehicles = maxConcurrentVehicles ?? 1;
+}
 
     const user = await UserModel.create(newUser);
 
@@ -210,6 +221,8 @@ const createUser = async (req, res) => {
     });
   }
 };
+
+
 const removeUser = async (req, res) => {
   const { id } = req.params;
 

@@ -1,4 +1,3 @@
-
 import mongoose from "mongoose";
 import { Temporal } from "@js-temporal/polyfill";
 
@@ -7,7 +6,6 @@ import Vehicle from "../models/Vehicle.js";
 import Service from "../models/Service.js";
 import Appointment from "../models/Appointment.js";
 import WorkshopSettings from "../models/WorkshopSettings.js";
-
 
 import {
   ACTIVE_STATUSES,
@@ -18,11 +16,68 @@ import {
 // Shared helpers
 // --------------------------------------------------
 
+const TECHNICIAN_ROLES = [
+  "MECHANIC",
+  "OIL_TECHNICIAN",
+  "BODY_REPAIR",
+  "DETAILING_TECHNICIAN",
+  "WASH_TECHNICIAN",
+];
+
+const findAvailableTechnician = async ({
+  requiredTechnicianRole,
+  appointments,
+  scheduledStart,
+  scheduledEnd,
+  session,
+}) => {
+  if (!TECHNICIAN_ROLES.includes(requiredTechnicianRole)) {
+    throw new Error(`Invalid technician role: ${requiredTechnicianRole}`);
+  }
+
+  const technicians = await UserModel.find({
+    role: requiredTechnicianRole,
+  })
+    .select("_id maxConcurrentVehicles")
+    .session(session)
+    .lean();
+console.log("Required technician role:", requiredTechnicianRole);
+console.log("Technicians found:", technicians.length);
+console.log(
+  "Technicians:",
+  technicians.map((technician) => ({
+    id: technician._id,
+    capacity: technician.maxConcurrentVehicles,
+  })),
+);
+  for (const technician of technicians) {
+    const technicianAppointments = appointments.filter(
+      (appointment) =>
+        appointment.assignedTechnician &&
+        String(appointment.assignedTechnician) === String(technician._id),
+    );
+
+    const maximumConcurrent = getMaximumConcurrentCount(
+      technicianAppointments,
+      scheduledStart,
+      scheduledEnd,
+    );
+console.log("Technician capacity check:", {
+  technicianId: technician._id,
+  capacity: technician.maxConcurrentVehicles,
+  maximumConcurrent,
+  overlappingAppointments: technicianAppointments.length,
+});
+    if (maximumConcurrent <= technician.maxConcurrentVehicles) {
+      return technician;
+    }
+  }
+
+  return null;
+};
+
 const parseClockTime = (value) => {
-  if (
-    typeof value !== "string" ||
-    !/^([01]\d|2[0-3]):([0-5]\d)$/.test(value)
-  ) {
+  if (typeof value !== "string" || !/^([01]\d|2[0-3]):([0-5]\d)$/.test(value)) {
     return null;
   }
 
@@ -66,7 +121,7 @@ const getOverlappingAppointments = (start, end, session) => {
     status: { $in: ACTIVE_STATUSES },
     scheduledAt: { $lt: end },
     scheduledEndAt: { $gt: start },
-  }).select("service scheduledAt scheduledEndAt status");
+  }).select("service scheduledAt assignedTechnician scheduledEndAt status");
 
   if (session) {
     query = query.session(session);
@@ -94,8 +149,7 @@ const checkBookingCapacity = ({
   }
 
   const serviceAppointments = appointments.filter(
-    (appointment) =>
-      appointment.service.toString() === service._id.toString(),
+    (appointment) => appointment.service.toString() === service._id.toString(),
   );
 
   const serviceMaximum = getMaximumConcurrentCount(
@@ -104,11 +158,7 @@ const checkBookingCapacity = ({
     end,
   );
 
-  const workshopMaximum = getMaximumConcurrentCount(
-    appointments,
-    start,
-    end,
-  );
+  const workshopMaximum = getMaximumConcurrentCount(appointments, start, end);
 
   if (serviceMaximum > service.maxConcurrentBookings) {
     return {
@@ -131,11 +181,12 @@ const checkBookingCapacity = ({
 
 const parseWorkshopDateTime = (date, time, timezone) => {
   try {
-    return Temporal.PlainDateTime.from(
-      `${date}T${time}`,
-    ).toZonedDateTime(timezone, {
-      disambiguation: "reject",
-    });
+    return Temporal.PlainDateTime.from(`${date}T${time}`).toZonedDateTime(
+      timezone,
+      {
+        disambiguation: "reject",
+      },
+    );
   } catch {
     return null;
   }
@@ -152,11 +203,7 @@ const isTransientTransactionError = (error) =>
 const validateAppointmentRequest = (body) => {
   const { customer, vehicle, service, scheduledAt, notes } = body || {};
 
-  if (
-    notes !== undefined &&
-    notes !== null &&
-    typeof notes !== "string"
-  ) {
+  if (notes !== undefined && notes !== null && typeof notes !== "string") {
     return { error: "Notes must be a string.", status: 400 };
   }
 
@@ -169,8 +216,7 @@ const validateAppointmentRequest = (body) => {
 
   if (!customer || !vehicle || !service || !scheduledAt) {
     return {
-      error:
-        "Customer, vehicle, service, and appointment date are required.",
+      error: "Customer, vehicle, service, and appointment date are required.",
       status: 400,
     };
   }
@@ -180,10 +226,7 @@ const validateAppointmentRequest = (body) => {
     ["vehicle", vehicle],
     ["service", service],
   ]) {
-    if (
-      typeof id !== "string" ||
-      !mongoose.Types.ObjectId.isValid(id)
-    ) {
+    if (typeof id !== "string" || !mongoose.Types.ObjectId.isValid(id)) {
       return {
         error: `Invalid ${field} ID.`,
         status: 400,
@@ -194,10 +237,7 @@ const validateAppointmentRequest = (body) => {
   const timestampPattern =
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
 
-  if (
-    typeof scheduledAt !== "string" ||
-    !timestampPattern.test(scheduledAt)
-  ) {
+  if (typeof scheduledAt !== "string" || !timestampPattern.test(scheduledAt)) {
     return {
       error: "scheduledAt must be an ISO timestamp with a timezone.",
       status: 400,
@@ -228,12 +268,7 @@ const validateAppointmentRequest = (body) => {
   };
 };
 
-
-const getAppointmentRecords = async ({
-  customer,
-  vehicle,
-  service,
-}) => {
+const getAppointmentRecords = async ({ customer, vehicle, service }) => {
   const customerUser = await UserModel.findOne({
     _id: customer,
     role: "CUSTOMER",
@@ -259,7 +294,7 @@ const getAppointmentRecords = async ({
     _id: service,
     isActive: true,
   }).select(
-    "name category basePrice estimatedDurationMinutes maxConcurrentBookings",
+    "name category basePrice estimatedDurationMinutes maxConcurrentBookings requiredTechnicianRole",
   );
 
   if (!selectedService) {
@@ -292,10 +327,7 @@ const getAppointmentRecords = async ({
   };
 };
 
-const validateAppointmentSchedule = async ({
-  appointmentDate,
-  duration,
-}) => {
+const validateAppointmentSchedule = async ({ appointmentDate, duration }) => {
   const workshop = await getWorkshopSettings();
 
   if (workshop.error) {
@@ -330,12 +362,10 @@ const validateAppointmentSchedule = async ({
     };
   }
 
-  const selectedStartMinutes =
-    localDateTime.hour * 60 + localDateTime.minute;
+  const selectedStartMinutes = localDateTime.hour * 60 + localDateTime.minute;
 
   const alignsWithSlotInterval =
-    (selectedStartMinutes - openingMinutes) %
-      settings.slotIntervalMinutes ===
+    (selectedStartMinutes - openingMinutes) % settings.slotIntervalMinutes ===
     0;
 
   if (
@@ -350,9 +380,7 @@ const validateAppointmentSchedule = async ({
   }
 
   const scheduledStart = appointmentDate;
-  const scheduledEnd = new Date(
-    scheduledStart.getTime() + duration * 60_000,
-  );
+  const scheduledEnd = new Date(scheduledStart.getTime() + duration * 60_000);
 
   return {
     data: {
@@ -390,9 +418,7 @@ const createAppointmentTransaction = async ({
       );
 
       if (!lockedSettings) {
-        const error = new Error(
-          "Workshop settings have not been configured.",
-        );
+        const error = new Error("Workshop settings have not been configured.");
         error.statusCode = 500;
         throw error;
       }
@@ -405,12 +431,11 @@ const createAppointmentTransaction = async ({
         throw error;
       }
 
-      const overlappingAppointments =
-        await getOverlappingAppointments(
-          scheduledStart,
-          scheduledEnd,
-          session,
-        );
+      const overlappingAppointments = await getOverlappingAppointments(
+        scheduledStart,
+        scheduledEnd,
+        session,
+      );
 
       const capacity = checkBookingCapacity({
         service: selectedService,
@@ -426,6 +451,22 @@ const createAppointmentTransaction = async ({
         throw error;
       }
 
+      const availableTechnician = await findAvailableTechnician({
+        requiredTechnicianRole: selectedService.requiredTechnicianRole,
+        appointments: overlappingAppointments,
+        scheduledStart,
+        scheduledEnd,
+        session,
+      });
+
+      if (!availableTechnician) {
+        const error = new Error(
+          "No available technician for this service at the selected time.",
+        );
+        error.statusCode = 409;
+        throw error;
+      }
+
       const [appointment] = await Appointment.create(
         [
           {
@@ -434,7 +475,7 @@ const createAppointmentTransaction = async ({
             service: selectedService._id,
             receptionist: receptionistId,
             createdBy: receptionistId,
-            assignedTechnician: null,
+            assignedTechnician: availableTechnician._id,
             scheduledAt: scheduledStart,
             scheduledEndAt: scheduledEnd,
             servicePrice: selectedService.basePrice,
@@ -463,16 +504,10 @@ const createAppointmentTransaction = async ({
 const populateAppointment = (appointmentId) =>
   Appointment.findById(appointmentId)
     .populate("customer", "firstname lastname username email phone")
-    .populate(
-      "vehicle",
-      "make model year licensePlate mileage color",
-    )
+    .populate("vehicle", "make model year licensePlate mileage color")
     .populate("service", "name category basePrice")
     .populate("receptionist", "firstname lastname username role")
-    .populate(
-      "assignedTechnician",
-      "firstname lastname username role",
-    )
+    .populate("assignedTechnician", "firstname lastname username role")
     .lean();
 
 const createAppointment = async (req, res) => {
@@ -493,13 +528,8 @@ const createAppointment = async (req, res) => {
       });
     }
 
-    const {
-      customer,
-      vehicle,
-      service,
-      notes,
-      appointmentDate,
-    } = requestResult.data;
+    const { customer, vehicle, service, notes, appointmentDate } =
+      requestResult.data;
 
     // 3. Load and validate customer, vehicle, and service
     const recordsResult = await getAppointmentRecords({
@@ -514,12 +544,8 @@ const createAppointment = async (req, res) => {
       });
     }
 
-    const {
-      customerUser,
-      customerVehicle,
-      selectedService,
-      duration,
-    } = recordsResult.data;
+    const { customerUser, customerVehicle, selectedService, duration } =
+      recordsResult.data;
 
     // 4. Validate the requested workshop time
     const scheduleResult = await validateAppointmentSchedule({
@@ -533,11 +559,7 @@ const createAppointment = async (req, res) => {
       });
     }
 
-    const {
-      settings,
-      scheduledStart,
-      scheduledEnd,
-    } = scheduleResult.data;
+    const { settings, scheduledStart, scheduledEnd } = scheduleResult.data;
 
     // 5. Create the appointment transactionally
     let createdAppointment;
@@ -574,14 +596,48 @@ const createAppointment = async (req, res) => {
       message: "Appointment created successfully.",
     });
   } catch (error) {
-    console.error("CREATE APPOINTMENT ERROR:", error);
+  console.error("CREATE APPOINTMENT ERROR:", error);
+
+  return res.status(error.statusCode || 500).json({
+    message: error.statusCode
+      ? error.message
+      : "Failed to create appointment.",
+  });
+}
+};
+
+const getAppointments = async (req, res) => {
+  try {
+    if (req.user?.role !== "RECEPTIONIST") {
+      return res.status(403).json({
+        message: "Only receptionists can retrieve appointments.",
+      });
+    }
+
+    const appointments = await Appointment.find()
+      .populate(
+        "customer",
+        "firstname lastname username email phone profileImage",
+      )
+      .populate("vehicle", "make model year licensePlate mileage color")
+      .populate("service", "name category basePrice")
+      .populate("receptionist", "firstname lastname username role")
+      .populate("assignedTechnician", "firstname lastname username role")
+      .sort({ scheduledAt: -1 })
+      .lean();
+
+    return res.status(200).json({
+      data: appointments,
+      message: "Appointments retrieved successfully.",
+    });
+  } catch (error) {
+    console.error("GET APPOINTMENTS ERROR:", error);
 
     return res.status(500).json({
-      message: "Failed to create appointment.",
+      message: "Failed to retrieve appointments.",
     });
   }
 };
-
 // --------------------------------------------------
 // GET /api/appointments/availability
 // Get available slots for a service and date
@@ -623,9 +679,7 @@ const getAvailableSlots = async (req, res) => {
     const selectedService = await Service.findOne({
       _id: serviceId,
       isActive: true,
-    }).select(
-      "name basePrice estimatedDurationMinutes maxConcurrentBookings",
-    );
+    }).select("name basePrice estimatedDurationMinutes maxConcurrentBookings");
 
     if (!selectedService) {
       return res.status(404).json({
@@ -677,10 +731,7 @@ const getAvailableSlots = async (req, res) => {
     const dayStart = new Date(startOfDay.epochMilliseconds);
     const dayEnd = new Date(startOfNextDay.epochMilliseconds);
 
-    const appointments = await getOverlappingAppointments(
-      dayStart,
-      dayEnd,
-    );
+    const appointments = await getOverlappingAppointments(dayStart, dayEnd);
 
     const now = Date.now();
     const slots = [];
@@ -752,14 +803,6 @@ const getAvailableSlots = async (req, res) => {
   }
 };
 
-const TECHNICIAN_ROLES = [
-  "MECHANIC",
-  "OIL_TECHNICIAN",
-  "BODY_REPAIR",
-  "DETAILING_TECHNICIAN",
-  "WASH_TECHNICIAN",
-];
-
 // --------------------------------------------------
 // PATCH /api/appointments/:id/start
 // Start an assigned appointment
@@ -799,14 +842,15 @@ const startAppointment = async (req, res) => {
         },
       },
       {
-        new: true,
+        returnDocument: "after",
         runValidators: true,
       },
     );
 
     if (!appointment) {
-      const existingAppointment = await Appointment.findById(id)
-        .select("assignedTechnician status");
+      const existingAppointment = await Appointment.findById(id).select(
+        "assignedTechnician status",
+      );
 
       if (!existingAppointment) {
         return res.status(404).json({
@@ -815,8 +859,7 @@ const startAppointment = async (req, res) => {
       }
 
       if (
-        String(existingAppointment.assignedTechnician) !==
-        String(req.user._id)
+        String(existingAppointment.assignedTechnician) !== String(req.user._id)
       ) {
         return res.status(403).json({
           message: "This appointment is not assigned to you.",
@@ -824,8 +867,7 @@ const startAppointment = async (req, res) => {
       }
 
       return res.status(409).json({
-        message:
-          "This appointment cannot be started in its current state.",
+        message: "This appointment cannot be started in its current state.",
       });
     }
 
@@ -874,8 +916,9 @@ const completeAppointment = async (req, res) => {
     }).select("startedAt");
 
     if (!existingAppointment) {
-      const appointment = await Appointment.findById(id)
-        .select("assignedTechnician status");
+      const appointment = await Appointment.findById(id).select(
+        "assignedTechnician status",
+      );
 
       if (!appointment) {
         return res.status(404).json({
@@ -890,8 +933,7 @@ const completeAppointment = async (req, res) => {
       }
 
       return res.status(409).json({
-        message:
-          "Only an appointment in progress can be completed.",
+        message: "Only an appointment in progress can be completed.",
       });
     }
 
@@ -925,7 +967,7 @@ const completeAppointment = async (req, res) => {
         },
       },
       {
-        new: true,
+        returnDocument: "after",
         runValidators: true,
       },
     );
@@ -952,6 +994,7 @@ const completeAppointment = async (req, res) => {
 
 export default {
   createAppointment,
+  getAppointments,
   getAvailableSlots,
   startAppointment,
   completeAppointment,
