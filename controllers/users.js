@@ -44,11 +44,22 @@ const getAllUsers = async (req, res) => {
     }
 
     const users = await UserModel.find(filter)
-      .select("firstname lastname username email phone role")
+      .select("firstname lastname username email phone role profileImage")
       .sort({ createdAt: -1 });
+const formattedUsers = users.map((user) => {
+  const userData = user.toObject();
 
+  userData.hasProfileImage = Boolean(
+    userData.profileImage?.data?.length &&
+    userData.profileImage?.contentType
+  );
+
+  delete userData.profileImage;
+
+  return userData;
+});
     return res.status(200).json({
-      data: users,
+      data: formattedUsers,
       message: "Users retrieved successfully.",
     });
   } catch (error) {
