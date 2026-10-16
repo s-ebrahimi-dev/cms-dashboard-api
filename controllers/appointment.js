@@ -41,13 +41,12 @@ const findAvailableTechnician = async ({
     .select("_id maxConcurrentVehicles")
     .session(session)
     .lean();
-console.log("Required technician role:", requiredTechnicianRole);
-console.log("Technicians found:", technicians.length);
 console.log(
-  "Technicians:",
+  "Technician capacity diagnostic:",
   technicians.map((technician) => ({
-    id: technician._id,
+    id: String(technician._id),
     capacity: technician.maxConcurrentVehicles,
+    capacityType: typeof technician.maxConcurrentVehicles,
   })),
 );
   for (const technician of technicians) {
@@ -412,7 +411,7 @@ const createAppointmentTransaction = async ({
         { _id: settings._id },
         { $inc: { bookingLockVersion: 1 } },
         {
-          new: true,
+         returnDocument: "after",
           session,
         },
       );
@@ -485,7 +484,7 @@ const createAppointmentTransaction = async ({
         ],
         { session },
       );
-
+console.log("Saved appointment technician:", appointment.assignedTechnician);
       createdAppointment = appointment;
     });
 
@@ -590,7 +589,10 @@ const createAppointment = async (req, res) => {
     const populatedAppointment = await populateAppointment(
       createdAppointment._id,
     );
-
+console.log(
+  "Populated appointment technician:",
+  populatedAppointment?.assignedTechnician,
+);
     return res.status(201).json({
       data: populatedAppointment,
       message: "Appointment created successfully.",
