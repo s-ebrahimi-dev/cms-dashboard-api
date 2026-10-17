@@ -36,6 +36,11 @@ router.get(
   controller.getAllUsers,
 );
 router.get(
+  "/contactable-employees",
+  middleware.checkAuth,
+  controller.getContactableEmployees,
+);
+router.get(
   "/:id",
   middleware.checkAuth,
   middleware.checkObjectId,

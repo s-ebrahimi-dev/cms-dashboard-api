@@ -70,7 +70,39 @@ const formattedUsers = users.map((user) => {
     });
   }
 };
+const getContactableEmployees = async (req, res) => {
+  try {
+    const employees = await UserModel.find({
+      role: {
+        $nin: ["ADMIN", "CUSTOMER"],
+      },
+    }).select("firstname lastname role profileImage");
 
+    const formattedEmployees = employees.map((employee) => {
+      const employeeData = employee.toObject();
+
+      employeeData.hasProfileImage = Boolean(
+        employeeData.profileImage?.data?.length &&
+          employeeData.profileImage?.contentType,
+      );
+
+      delete employeeData.profileImage;
+
+      return employeeData;
+    });
+
+    return res.status(200).json({
+      data: formattedEmployees,
+      message: "Contactable employees retrieved successfully.",
+    });
+  } catch (error) {
+    console.error("GET CONTACTABLE EMPLOYEES ERROR:", error);
+
+    return res.status(500).json({
+      message: "Failed to retrieve contactable employees.",
+    });
+  }
+};
 
 const getOneUser = async (req, res) => {
   const { id } = req.params;
@@ -449,6 +481,7 @@ export default {
   uploadProfileImage,
   getMe,
   getAllUsers,
+  getContactableEmployees,
   getOneUser,
   registerUser,
   loginUser,
