@@ -43,6 +43,26 @@ const getCustomerVehicles = async (req, res) => {
   }
 };
 
+const getAllVehicles = async (req, res) => {
+  try {
+    const vehicles = await Vehicle.find()
+      .select("make model year licensePlate vin mileage color customer")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      data: vehicles,
+      message: "Vehicles retrieved successfully.",
+    });
+  } catch (error) {
+    console.error("Failed to retrieve all vehicles:", error);
+
+    return res.status(500).json({
+      message: "Failed to retrieve vehicles.",
+    });
+  }
+};
+
+
 const createVehicle = async (req, res) => {
   try {
     const {
@@ -129,4 +149,4 @@ const createVehicle = async (req, res) => {
 
 
 
-export default { getCustomerVehicles, createVehicle };
+export default { getCustomerVehicles, getAllVehicles, createVehicle };
