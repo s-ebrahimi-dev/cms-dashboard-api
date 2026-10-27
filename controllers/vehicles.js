@@ -151,7 +151,9 @@ const getMyVehicles = async (req, res) => {
     const vehicles = await Vehicle.find({
       customer: req.user._id,
     })
-      .select("make model year licensePlate vin mileage color customer")
+      .select(
+        "make model year licensePlate vin mileage color customer vehicleImage",
+      )
       .sort({ createdAt: -1 });
     const data = vehicles.map((vehicle) => {
       const item = vehicle.toObject();
