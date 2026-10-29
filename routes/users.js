@@ -83,6 +83,10 @@ router.delete(
   middleware.checkObjectId,
   controller.removeUser,
 );
+// OTP
+router.post("/otp/request", controller.requestOtp);
+router.post("/otp/retry", controller.retryOtp);
+router.post("/otp/verify", controller.verifyOtp);
 router.delete("/delete/", (req, res) => {
   return res.status(400).json({
     message: "User id is required",

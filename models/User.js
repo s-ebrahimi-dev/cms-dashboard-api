@@ -22,19 +22,23 @@ const schema = new mongoose.Schema(
       required: true,
       trim: true,
       minlength: 3,
+      lowercase: true,
       maxlength: 30,
+      unique: true
     },
     email: {
       type: String,
       required: true,
       trim: true,
       lowercase: true,
+      unique: true
     },
     phone: {
       type: String,
       required: true,
       trim: true,
       match: /^[0-9]{11}$/,
+      unique: true,
     },
     password: {
       type: String,

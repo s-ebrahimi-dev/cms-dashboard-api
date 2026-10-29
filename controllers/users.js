@@ -3,7 +3,16 @@ import bcrypt from "bcrypt";
 import validator from "../validator/users.js";
 import jwt from "jsonwebtoken";
 import UserModel from "../models/User.js";
-
+import {
+  sendOtp,
+  retryOtp as retrySignalAdsOtp,
+  verifyOtp as verifySignalAdsOtp,
+} from "../services/signalads.service.js";
+import {
+  saveOtpSession,
+  getOtpSession,
+  deleteOtpSession,
+} from "../services/otpSessions.js";
 const TECHNICIAN_ROLES = [
   "MECHANIC",
   "OIL_TECHNICIAN",
@@ -34,7 +43,6 @@ const getMe = async (req, res) => {
   }
 };
 
-
 const getAllUsers = async (req, res) => {
   try {
     const filter = {};
@@ -46,18 +54,18 @@ const getAllUsers = async (req, res) => {
     const users = await UserModel.find(filter)
       .select("firstname lastname username email phone role profileImage")
       .sort({ createdAt: -1 });
-const formattedUsers = users.map((user) => {
-  const userData = user.toObject();
+    const formattedUsers = users.map((user) => {
+      const userData = user.toObject();
 
-  userData.hasProfileImage = Boolean(
-    userData.profileImage?.data?.length &&
-    userData.profileImage?.contentType
-  );
+      userData.hasProfileImage = Boolean(
+        userData.profileImage?.data?.length &&
+        userData.profileImage?.contentType,
+      );
 
-  delete userData.profileImage;
+      delete userData.profileImage;
 
-  return userData;
-});
+      return userData;
+    });
     return res.status(200).json({
       data: formattedUsers,
       message: "Users retrieved successfully.",
@@ -83,7 +91,7 @@ const getContactableEmployees = async (req, res) => {
 
       employeeData.hasProfileImage = Boolean(
         employeeData.profileImage?.data?.length &&
-          employeeData.profileImage?.contentType,
+        employeeData.profileImage?.contentType,
       );
 
       delete employeeData.profileImage;
@@ -125,8 +133,6 @@ const registerUser = async (req, res) => {
   try {
     const { error, value } = validator.registerSchema.validate(req.body || {});
 
-    console.log("REGISTER BODY:", req.body);
-
     if (error) {
       return res.status(400).json({
         message: error.details[0].message,
@@ -135,33 +141,79 @@ const registerUser = async (req, res) => {
 
     const { firstname, lastname, username, email, phone, password } = value;
 
+    // Normalize values before checking for duplicates.
+    const normalizedUsername = username.trim().toLowerCase();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Check for existing unique fields.
+    const existingPhone = await UserModel.exists({ phone });
+
+    if (existingPhone) {
+      return res.status(409).json({
+        message: "This phone number is already registered.",
+      });
+    }
+
+    const existingEmail = await UserModel.exists({
+      email: normalizedEmail,
+    });
+
+    if (existingEmail) {
+      return res.status(409).json({
+        message: "This email is already registered.",
+      });
+    }
+
+    const existingUsername = await UserModel.exists({
+      username: normalizedUsername,
+    });
+
+    if (existingUsername) {
+      return res.status(409).json({
+        message: "This username is already taken.",
+      });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = {
+    const user = await UserModel.create({
       firstname,
       lastname,
-      username,
-      email,
+      username: normalizedUsername,
+      email: normalizedEmail,
       phone,
       password: hashedPassword,
       role: "CUSTOMER",
-    };
-
-    const user = await UserModel.create(newUser);
+    });
 
     const userWithoutPassword = user.toObject();
-
     delete userWithoutPassword.password;
 
     return res.status(201).json({
       data: userWithoutPassword,
-      message: "User registered successfully :))",
+      message: "User registered successfully.",
     });
   } catch (error) {
     console.error("REGISTER ERROR:", error);
 
+    if (error.code === 11000) {
+      const duplicateField = Object.keys(error.keyPattern || {})[0];
+
+      const messages = {
+        phone: "This phone number is already registered.",
+        email: "This email is already registered.",
+        username: "This username is already taken.",
+      };
+
+      return res.status(409).json({
+        message:
+          messages[duplicateField] ||
+          "A record with this information already exists.",
+      });
+    }
+
     return res.status(500).json({
-      message: error.message,
+      message: "An unexpected error occurred during registration.",
     });
   }
 };
@@ -227,8 +279,16 @@ const createUser = async (req, res) => {
       });
     }
 
-    const { firstname, lastname, username, email, phone, password, role, maxConcurrentVehicles, } =
-      value;
+    const {
+      firstname,
+      lastname,
+      username,
+      email,
+      phone,
+      password,
+      role,
+      maxConcurrentVehicles,
+    } = value;
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -240,11 +300,11 @@ const createUser = async (req, res) => {
       phone,
       password: hashedPassword,
       role,
-    }
+    };
 
     if (TECHNICIAN_ROLES.includes(role)) {
-  newUser.maxConcurrentVehicles = maxConcurrentVehicles ?? 1;
-}
+      newUser.maxConcurrentVehicles = maxConcurrentVehicles ?? 1;
+    }
 
     const user = await UserModel.create(newUser);
 
@@ -264,7 +324,6 @@ const createUser = async (req, res) => {
     });
   }
 };
-
 
 const removeUser = async (req, res) => {
   const { id } = req.params;
@@ -320,14 +379,7 @@ const updateOwnProfile = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    const {
-      firstname,
-      lastname,
-      username,
-      email,
-      phone,
-      password,
-    } = req.body;
+    const { firstname, lastname, username, email, phone, password } = req.body;
 
     const updatedUser = await UserModel.findByIdAndUpdate(
       userId,
@@ -474,6 +526,208 @@ const logoutUser = (req, res) => {
   });
 };
 
+const normalizeIranianPhone = (phone) => {
+  const normalized = String(phone ?? "")
+    .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
+    .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)))
+    .replace(/[\s-]/g, "");
+
+  // Accept 09xxxxxxxxx or +989xxxxxxxxx.
+  if (/^09[0-9]{9}$/.test(normalized)) {
+    return normalized;
+  }
+
+  if (/^\+989[0-9]{9}$/.test(normalized)) {
+    return `0${normalized.slice(3)}`;
+  }
+
+  return null;
+};
+
+const requestOtp = async (req, res) => {
+  try {
+    const phone = normalizeIranianPhone(req.body?.phone);
+
+    if (!phone) {
+      return res.status(400).json({
+        message: "Enter a valid Iranian mobile number.",
+      });
+    }
+
+    const user = await UserModel.findOne({ phone }).select("_id phone");
+
+    if (!user) {
+      return res.status(404).json({
+        message: "No account is registered with this phone number.",
+      });
+    }
+
+    // SignalAds accepts the international Iranian format.
+    const mobile = `+98${phone.slice(1)}`;
+    const result = await sendOtp(mobile);
+
+    if (typeof result?.uuid !== "string" || !result.uuid || !result.expire_at) {
+      console.error("Unexpected SignalAds send response.");
+      return res.status(502).json({
+        message: "The OTP provider returned an invalid response.",
+      });
+    }
+
+    const expireAt = new Date(result.expire_at).getTime();
+
+    if (!Number.isFinite(expireAt) || expireAt <= Date.now()) {
+      return res.status(502).json({
+        message: "The OTP provider returned an invalid expiration time.",
+      });
+    }
+
+    saveOtpSession(result.uuid, phone, result.expire_at);
+
+    return res.status(200).json({
+      message: "OTP sent successfully.",
+      uuid: result.uuid,
+      expireAt: result.expire_at,
+    });
+  } catch (error) {
+    console.error("REQUEST OTP ERROR:", error.message);
+
+    return res.status(502).json({
+      message: "Unable to send OTP. Please try again later.",
+    });
+  }
+};
+
+const retryOtp = async (req, res) => {
+  try {
+    const { uuid } = req.body ?? {};
+
+    if (typeof uuid !== "string" || !uuid.trim()) {
+      return res.status(400).json({
+        message: "A valid OTP session UUID is required.",
+      });
+    }
+
+    const session = getOtpSession(uuid);
+
+    if (!session) {
+      return res.status(400).json({
+        message: "OTP session not found or expired. Request a new code.",
+      });
+    }
+
+    const result = await retrySignalAdsOtp(uuid);
+
+    if (
+      result?.uuid !== uuid ||
+      !result?.expire_at ||
+      !Number.isFinite(new Date(result.expire_at).getTime()) ||
+      new Date(result.expire_at).getTime() <= Date.now()
+    ) {
+      return res.status(502).json({
+        message: "The OTP provider returned an invalid response.",
+      });
+    }
+
+    // Refresh the expiration time for the existing session.
+    saveOtpSession(uuid, session.phone, result.expire_at);
+
+    return res.status(200).json({
+      message: "A new OTP has been sent.",
+      uuid,
+      expireAt: result.expire_at,
+    });
+  } catch (error) {
+    console.error("RETRY OTP ERROR:", error.message);
+
+    return res.status(502).json({
+      message: "Unable to resend OTP. Please try again later.",
+    });
+  }
+};
+
+const normalizeOtpCode = (code) =>
+  String(code ?? "")
+    .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
+    .replace(/[٠-٩]/g, (digit) => String("٠١٢٣٤٥٦٧٨٩".indexOf(digit)));
+
+const verifyOtp = async (req, res) => {
+  try {
+    const { uuid } = req.body ?? {};
+    const code = normalizeOtpCode(req.body?.code);
+
+    if (
+      typeof uuid !== "string" ||
+      !uuid.trim() ||
+      !/^[0-9]{4,6}$/.test(code)
+    ) {
+      return res.status(400).json({
+        message: "A valid session UUID and OTP code are required.",
+      });
+    }
+
+    const session = getOtpSession(uuid);
+
+    if (!session) {
+      return res.status(400).json({
+        message: "OTP session not found or expired. Request a new code.",
+      });
+    }
+
+    // Ask SignalAds to verify the code.
+    const result = await verifySignalAdsOtp(uuid, code);
+
+    if (result?.uuid !== uuid || result?.verified !== true) {
+      return res.status(401).json({
+        message: "OTP verification failed.",
+      });
+    }
+
+    // The phone comes from our server-side session, not the request.
+    const user = await UserModel.findOne({
+      phone: session.phone,
+    });
+
+    // SignalAds has already consumed a successfully verified OTP.
+    deleteOtpSession(uuid);
+
+    if (!user) {
+      return res.status(401).json({
+        message: "The account associated with this OTP no longer exists.",
+      });
+    }
+
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      algorithm: "HS256",
+      expiresIn: "10d",
+    });
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 10 * 24 * 60 * 60 * 1000,
+    });
+
+    const userWithoutPassword = user.toObject();
+    delete userWithoutPassword.password;
+    delete userWithoutPassword.profileImage;
+
+    return res.status(200).json({
+      data: {
+        ...userWithoutPassword,
+        hasProfileImage: Boolean(user.profileImage?.data),
+        token,
+      },
+      message: "User logged in successfully.",
+    });
+  } catch (error) {
+    console.error("VERIFY OTP ERROR:", error.message);
+
+    return res.status(502).json({
+      message: "Unable to verify OTP. Please try again.",
+    });
+  }
+};
 
 export default {
   getProfileImage,
@@ -491,5 +745,7 @@ export default {
   updateOwnProfile,
   updateUserDocument,
   logoutUser,
-
+  requestOtp,
+  retryOtp,
+  verifyOtp,
 };
