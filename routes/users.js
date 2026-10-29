@@ -49,6 +49,20 @@ router.get(
 );
 
 router.post("/register", controller.registerUser);
+
+// Email verification
+router.post("/register", controller.registerUser);
+
+router.post(
+  "/email-verification/verify",
+  controller.verifyEmail,
+);
+
+// router.post(
+//   "/email-verification/resend",
+//   controller.resendEmailVerification,
+// );
+// -----------------------------------------
 router.post("/", middleware.checkAdmin, controller.createUser);
 
 router.post(
@@ -83,6 +97,7 @@ router.delete(
   middleware.checkObjectId,
   controller.removeUser,
 );
+
 // OTP
 router.post("/otp/request", controller.requestOtp);
 router.post("/otp/retry", controller.retryOtp);
