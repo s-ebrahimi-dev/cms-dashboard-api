@@ -36,7 +36,11 @@ const signaladsRequest = async (endpoint, body) => {
 };
 
 export const sendOtp = (mobile) =>
-  signaladsRequest("/api_v1/otp/send", {mobile});
+  signaladsRequest("/api_v1/otp/send", {
+    mobile,
+    pattern_id: 2514,
+
+  });
 
 export const retryOtp = (uuid) =>
   signaladsRequest("/api_v1/otp/retry", {
