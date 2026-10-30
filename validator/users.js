@@ -120,4 +120,30 @@ const createUserSchema = joi.object({
   }),
 });
 
-export default { loginSchema, registerSchema, createUserSchema };
+const updateOwnAddressSchema = joi.object({
+  address: joi.object({
+    country: joi.string().trim().max(100).required(),
+    province: joi.string().trim().max(100).allow(""),
+    city: joi.string().trim().max(100).required(),
+    district: joi.string().trim().max(100).allow(""),
+    street: joi.string().trim().max(150).allow(""),
+    buildingNumber: joi.string().trim().max(30).allow(""),
+    unit: joi.string().trim().max(30).allow(""),
+    postalCode: joi.string().trim().max(30).allow(""),
+
+    location: joi.object({
+      type: joi.string().valid("Point").required(),
+
+      coordinates: joi
+        .array()
+        .items(
+          joi.number().min(-180).max(180).required(),
+          joi.number().min(-90).max(90).required(),
+        )
+        .length(2)
+        .required(),
+    }).required(),
+  }).required(),
+});
+
+export default { loginSchema, registerSchema, createUserSchema, updateOwnAddressSchema };

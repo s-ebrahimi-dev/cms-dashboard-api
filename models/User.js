@@ -1,4 +1,51 @@
 import mongoose from "mongoose";
+
+const locationSchema = new mongoose.Schema(
+  {
+    type: {
+      type: String,
+      enum: ["Point"],
+      default: "Point",
+    },
+    coordinates: {
+      type: [Number],
+      required: true,
+      default: undefined,
+      validate: {
+        validator: (coordinates) =>
+          Array.isArray(coordinates) &&
+          coordinates.length === 2 &&
+          coordinates[0] >= -180 &&
+          coordinates[0] <= 180 &&
+          coordinates[1] >= -90 &&
+          coordinates[1] <= 90,
+        message:
+          "Coordinates must contain valid longitude and latitude values.",
+      },
+    },
+  },
+  { _id: false },
+);
+
+const addressSchema = new mongoose.Schema(
+  {
+    country: { type: String, trim: true },
+    province: { type: String, trim: true },
+    city: { type: String, trim: true },
+    district: { type: String, trim: true },
+    street: { type: String, trim: true },
+    buildingNumber: { type: String, trim: true },
+    unit: { type: String, trim: true },
+    postalCode: { type: String, trim: true },
+
+    location: {
+      type: locationSchema,
+      required: true,
+    },
+  },
+  { _id: false },
+);
+
 const schema = new mongoose.Schema(
   {
     firstname: {
@@ -24,14 +71,14 @@ const schema = new mongoose.Schema(
       minlength: 3,
       lowercase: true,
       maxlength: 30,
-      unique: true
+      unique: true,
     },
     email: {
       type: String,
       required: true,
       trim: true,
       lowercase: true,
-      unique: true
+      unique: true,
     },
     phone: {
       type: String,
@@ -62,11 +109,14 @@ const schema = new mongoose.Schema(
     maxConcurrentVehicles: {
       type: Number,
       min: 1,
-      
     },
     profileImage: {
       data: Buffer,
       contentType: String,
+    },
+    address: {
+      type: addressSchema,
+      default: undefined,
     },
   },
   {

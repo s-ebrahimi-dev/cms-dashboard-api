@@ -7,8 +7,7 @@ const signaladsRequest = async (endpoint, body) => {
   if (!token) {
     throw new Error("SIGNALADS_API_TOKEN is not configured.");
   }
-  console.log("SignalAds endpoint:", `${SIGNALADS_BASE_URL}${endpoint}`);
-  console.log("SignalAds request body:", JSON.stringify(body));
+
   const response = await fetch(`${SIGNALADS_BASE_URL}${endpoint}`, {
     method: "POST",
     headers: {
@@ -21,8 +20,6 @@ const signaladsRequest = async (endpoint, body) => {
   const data = await response.json().catch(() => null);
 
   if (!response.ok) {
-    console.error("SignalAds HTTP status:", response.status);
-    console.error("SignalAds response body:", JSON.stringify(data, null, 2));
 
     const error = new Error(
       data?.message || `SignalAds request failed (${response.status}).`,

@@ -288,6 +288,7 @@ const registerUser = async (req, res) => {
 };
 
 const verifyEmail = async (req, res) => {
+  console.log("VERIFY EMAIL CONTROLLER REACHED");
   try {
     const { email, code } = req.body || {};
 
@@ -601,6 +602,44 @@ const updateOwnProfile = async (req, res) => {
   }
 };
 
+const updateOwnAddress = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { address } = req.body;
+
+    if (!address || !address.location) {
+      return res.status(400).json({
+        message: "A valid address and location are required.",
+      });
+    }
+
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      userId,
+      { $set: { address } },
+      {
+        new: true,
+        runValidators: true,
+      },
+    ).select("-password");
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        message: "User not found.",
+      });
+    }
+
+    return res.status(200).json({
+      message: "Address updated successfully.",
+      data: updatedUser.address,
+    });
+  } catch (error) {
+    console.error("UPDATE OWN ADDRESS ERROR:", error);
+
+    return res.status(500).json({
+      message: "Failed to update address.",
+    });
+  }
+};
 const updateUserDocument = async (req, res) => {
   try {
     const { id } = req.params;
@@ -661,6 +700,7 @@ export const uploadProfileImage = async (req, res) => {
     });
   }
 };
+
 const getProfileImage = async (req, res) => {
   try {
     const user = await UserModel.findById(req.params.id);
@@ -914,6 +954,124 @@ const verifyOtp = async (req, res) => {
   }
 };
 
+
+const resendEmailVerification = async (req, res) => {
+  try {
+    // 1. Validate the email.
+    const { email } = req.body || {};
+
+    if (typeof email !== "string" || !email.trim()) {
+      return res.status(400).json({
+        message: "A valid email address is required.",
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // 2. Check whether the account has already been created.
+    const existingUser = await UserModel.exists({
+      email: normalizedEmail,
+    });
+
+    if (existingUser) {
+      return res.status(409).json({
+        message: "This email is already registered.",
+      });
+    }
+
+    // 3. Find the pending registration.
+    // We intentionally don't filter by expiresAt here:
+    // an expired registration can receive a fresh code.
+    const pendingRegistration = await PendingRegistration.findOne({
+      email: normalizedEmail,
+    }).select("+verificationCodeHash");
+
+    if (!pendingRegistration) {
+      return res.status(404).json({
+        message:
+          "No pending registration was found. Please register again.",
+      });
+    }
+
+    // 4. Enforce a 60-second resend cooldown.
+    const cooldown = 60 * 1000;
+    const timeSinceLastEmail =
+      Date.now() - pendingRegistration.lastCodeSentAt.getTime();
+
+    if (timeSinceLastEmail < cooldown) {
+      const secondsRemaining = Math.ceil(
+        (cooldown - timeSinceLastEmail) / 1000,
+      );
+
+      return res.status(429).json({
+        message: "Please wait before requesting another verification code.",
+        retryAfter: secondsRemaining,
+      });
+    }
+
+    // 5. Generate a new verification code.
+    const verificationCode = generateVerificationCode();
+    const verificationCodeHash =
+      hashVerificationCode(verificationCode);
+
+    // Keep the old values so we can restore them if email delivery fails.
+    const previousValues = {
+      verificationCodeHash:
+        pendingRegistration.verificationCodeHash,
+      expiresAt: pendingRegistration.expiresAt,
+      lastCodeSentAt: pendingRegistration.lastCodeSentAt,
+      attempts: pendingRegistration.attempts,
+    };
+
+    // 6. Update the pending registration.
+    pendingRegistration.verificationCodeHash =
+      verificationCodeHash;
+
+    pendingRegistration.expiresAt = new Date(
+      Date.now() + 10 * 60 * 1000,
+    );
+
+    pendingRegistration.lastCodeSentAt = new Date();
+    pendingRegistration.attempts = 0;
+
+    await pendingRegistration.save();
+
+    // 7. Send the new verification code.
+    try {
+      const emailResult = await sendVerificationEmail(
+        normalizedEmail,
+        verificationCode,
+      );
+
+      return res.status(200).json({
+        message: "A new verification code has been sent.",
+        data: {
+          email: normalizedEmail,
+          expiresIn: 600,
+          ...(process.env.NODE_ENV !== "production" &&
+          emailResult.previewUrl
+            ? { emailPreviewUrl: emailResult.previewUrl }
+            : {}),
+        },
+      });
+    } catch (emailError) {
+      // Restore the previous registration state if sending fails.
+      Object.assign(pendingRegistration, previousValues);
+      await pendingRegistration.save();
+
+      throw emailError;
+    }
+  } catch (error) {
+    console.error("RESEND EMAIL VERIFICATION ERROR:", error);
+
+    return res.status(500).json({
+      message:
+        "An unexpected error occurred while resending the verification email.",
+    });
+  }
+};
+
+
 export default {
   getProfileImage,
   getMyProfileImage,
@@ -928,11 +1086,13 @@ export default {
   removeUser,
   updateUser,
   updateOwnProfile,
+  updateOwnAddress,
   updateUserDocument,
   logoutUser,
   requestOtp,
   retryOtp,
   verifyOtp,
   verifyEmail,
+  resendEmailVerification,
 
 };

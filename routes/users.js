@@ -49,19 +49,21 @@ router.get(
 );
 
 router.post("/register", controller.registerUser);
-
+console.log("Registering email verification route");
 // Email verification
-router.post("/register", controller.registerUser);
-
 router.post(
   "/email-verification/verify",
   controller.verifyEmail,
 );
+console.log(
+  "Resend controller:",
+  typeof controller.resendEmailVerification,
+);
 
-// router.post(
-//   "/email-verification/resend",
-//   controller.resendEmailVerification,
-// );
+router.post(
+  "/email-verification/resend",
+  controller.resendEmailVerification,
+);
 // -----------------------------------------
 router.post("/", middleware.checkAdmin, controller.createUser);
 
@@ -83,6 +85,11 @@ router.patch(
   "/profile",
   middleware.checkAuth,
   controller.updateOwnProfile,
+);
+router.patch(
+  "/address",
+  middleware.checkAuth,
+  controller.updateOwnAddress,
 );
 router.put(
   "/update/:id",
