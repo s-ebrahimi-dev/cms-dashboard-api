@@ -2,7 +2,7 @@ import express from "express";
 import controller from "../controllers/users.js";
 import middleware from "../middlewares/index.js";
 import upload from "../middlewares/upload.js";
-
+import userValidator from "../validator/users.js";
 const router = express.Router();
 
 router.use((req, res, next) => {
@@ -89,6 +89,7 @@ router.patch(
 router.patch(
   "/address",
   middleware.checkAuth,
+   middleware.validate(userValidator.updateOwnAddressSchema),
   controller.updateOwnAddress,
 );
 router.put(

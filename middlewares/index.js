@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose"
 import UserModel from "../models/User.js";
-
+import validate from "./validate.js";
 
 const checkAuth = async (req, res, next) => {
   try {
@@ -105,4 +105,4 @@ const checkObjectId = (req, res, next) => {
   }
   next()
 }
-export default {checkAuth, checkAdmin, checkObjectId, checkRole };
+export default {checkAuth, checkAdmin, checkObjectId, checkRole, validate };
